@@ -2,8 +2,8 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import type { Cart, CartItem, CustomerDetails, ShippingAddress } from '@/lib/types'
+import { useEffect, useState, useCallback } from 'react'
+import type { Cart, CustomerDetails, ShippingAddress } from '@/lib/types'
 import { formatPrice } from '@/lib/utils'
 
 export default function CheckoutPage() {
@@ -32,12 +32,7 @@ export default function CheckoutPage() {
 
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  useEffect(() => {
-    fetchCart()
-    fetchDustBalance()
-  }, [])
-
-  async function fetchCart() {
+  const fetchCart = useCallback(async () => {
     try {
       // Fetch cart with credentials to ensure cookies are sent
       const res = await fetch('/api/cart', { 
@@ -69,9 +64,9 @@ export default function CheckoutPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [router])
 
-  async function fetchDustBalance() {
+  const fetchDustBalance = useCallback(async () => {
     try {
       const res = await fetch('/api/dust-balance')
       const data = await res.json()
@@ -79,7 +74,12 @@ export default function CheckoutPage() {
     } catch (error) {
       console.error('Error fetching dust balance:', error)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchCart()
+    fetchDustBalance()
+  }, [fetchCart, fetchDustBalance])
 
   function validateForm(): boolean {
     const newErrors: Record<string, string> = {}
@@ -208,10 +208,11 @@ export default function CheckoutPage() {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-2">
                       First Name *
                     </label>
                     <input
+                      id="firstName"
                       type="text"
                       value={customerDetails.firstName}
                       onChange={(e) =>
@@ -227,10 +228,11 @@ export default function CheckoutPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-2">
                       Last Name *
                     </label>
                     <input
+                      id="lastName"
                       type="text"
                       value={customerDetails.lastName}
                       onChange={(e) =>
@@ -247,10 +249,11 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                     Email *
                   </label>
                   <input
+                    id="email"
                     type="email"
                     value={customerDetails.email}
                     onChange={(e) =>
@@ -266,10 +269,11 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
                     Phone (Optional)
                   </label>
                   <input
+                    id="phone"
                     type="tel"
                     value={customerDetails.phone}
                     onChange={(e) =>
@@ -285,10 +289,11 @@ export default function CheckoutPage() {
                 <h2 className="text-2xl font-semibold mb-6">Shipping Address</h2>
 
                 <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="address1" className="block text-sm font-medium text-gray-700 mb-2">
                     Address Line 1 *
                   </label>
                   <input
+                    id="address1"
                     type="text"
                     autoComplete="street-address"
                     value={shippingAddress.address1}
@@ -306,10 +311,11 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="address2" className="block text-sm font-medium text-gray-700 mb-2">
                     Address Line 2 (Optional)
                   </label>
                   <input
+                    id="address2"
                     type="text"
                     value={shippingAddress.address2}
                     onChange={(e) =>
@@ -321,10 +327,11 @@ export default function CheckoutPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-2">
                       City *
                     </label>
                     <input
+                      id="city"
                       type="text"
                       autoComplete="address-level2"
                       value={shippingAddress.city}
@@ -341,10 +348,11 @@ export default function CheckoutPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-2">
                       State *
                     </label>
                     <input
+                      id="state"
                       type="text"
                       autoComplete="address-level1"
                       value={shippingAddress.state}
@@ -361,10 +369,11 @@ export default function CheckoutPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="postalCode" className="block text-sm font-medium text-gray-700 mb-2">
                       Postal Code *
                     </label>
                     <input
+                      id="postalCode"
                       type="text"
                       autoComplete="postal-code"
                       value={shippingAddress.postalCode}
@@ -382,10 +391,11 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="country" className="block text-sm font-medium text-gray-700 mb-2">
                     Country *
                   </label>
                   <select
+                    id="country"
                     autoComplete="country"
                     value={shippingAddress.country}
                     onChange={(e) =>

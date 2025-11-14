@@ -1,12 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import type { Product, CartItem } from '@/lib/types'
 import { formatPrice } from '@/lib/utils'
 import { MIN_QUANTITY, MAX_QUANTITY } from '@/lib/constants'
 import { clamp } from '@/lib/utils'
+import { dispatchCartUpdate } from '@/lib/api-client'
 
 export default function ProductDetailPage() {
   const params = useParams()
@@ -20,27 +21,7 @@ export default function ProductDetailPage() {
   const [cartItem, setCartItem] = useState<CartItem | null>(null)
   const [updating, setUpdating] = useState(false)
 
-  useEffect(() => {
-    fetchProduct()
-    fetchDustBalance()
-  }, [handle])
-
-  useEffect(() => {
-    if (product) {
-      fetchCartItem()
-    }
-
-    // Listen for cart updates
-    const handleCartUpdate = () => {
-      if (product) {
-        fetchCartItem()
-      }
-    }
-    window.addEventListener('cartUpdated', handleCartUpdate)
-    return () => window.removeEventListener('cartUpdated', handleCartUpdate)
-  }, [product])
-
-  async function fetchProduct() {
+  const fetchProduct = useCallback(async () => {
     try {
       const res = await fetch('/api/products')
       const data = await res.json()
@@ -59,9 +40,9 @@ export default function ProductDetailPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [handle, router])
 
-  async function fetchDustBalance() {
+  const fetchDustBalance = useCallback(async () => {
     try {
       const res = await fetch('/api/dust-balance')
       const data = await res.json()
@@ -69,9 +50,14 @@ export default function ProductDetailPage() {
     } catch (error) {
       console.error('Error fetching dust balance:', error)
     }
-  }
+  }, [])
 
-  async function fetchCartItem() {
+  useEffect(() => {
+    fetchProduct()
+    fetchDustBalance()
+  }, [fetchProduct, fetchDustBalance])
+
+  const fetchCartItem = useCallback(async () => {
     if (!product) return
     
     try {
@@ -96,7 +82,27 @@ export default function ProductDetailPage() {
     } catch (error) {
       console.error('Error fetching cart:', error)
     }
-  }
+  }, [product])
+
+  useEffect(() => {
+    if (product) {
+      fetchCartItem()
+    }
+
+    // Listen for cart updates
+    const handleCartUpdate = () => {
+      if (product) {
+        fetchCartItem()
+      }
+    }
+    
+    if (typeof window !== 'undefined') {
+      window.addEventListener('cartUpdated', handleCartUpdate)
+      return () => window.removeEventListener('cartUpdated', handleCartUpdate)
+    }
+  }, [product, fetchCartItem])
+
+
 
   async function handleAddToCart() {
     if (!product) return
@@ -126,7 +132,7 @@ export default function ProductDetailPage() {
       })
 
       const data = await res.json()
-      window.dispatchEvent(new Event('cartUpdated'))
+      dispatchCartUpdate()
       await fetchCartItem()
     } catch (error) {
       console.error('Error adding to cart:', error)
@@ -156,7 +162,7 @@ export default function ProductDetailPage() {
 
       const data = await res.json()
       setQuantity(newQuantity)
-      window.dispatchEvent(new Event('cartUpdated'))
+      dispatchCartUpdate()
       await fetchCartItem()
     } catch (error) {
       console.error('Error updating quantity:', error)
@@ -183,7 +189,7 @@ export default function ProductDetailPage() {
         }),
       })
 
-      window.dispatchEvent(new Event('cartUpdated'))
+      dispatchCartUpdate()
       setCartItem(null)
       setQuantity(1)
     } catch (error) {
@@ -198,9 +204,6 @@ export default function ProductDetailPage() {
     if (quantity < MAX_QUANTITY) {
       const newQuantity = clamp(quantity + 1, MIN_QUANTITY, MAX_QUANTITY)
       setQuantity(newQuantity)
-      if (cartItem) {
-        handleUpdateQuantity(newQuantity)
-      }
     }
   }
 
@@ -208,9 +211,6 @@ export default function ProductDetailPage() {
     if (quantity > MIN_QUANTITY) {
       const newQuantity = clamp(quantity - 1, MIN_QUANTITY, MAX_QUANTITY)
       setQuantity(newQuantity)
-      if (cartItem) {
-        handleUpdateQuantity(newQuantity)
-      }
     }
   }
 
@@ -230,7 +230,6 @@ export default function ProductDetailPage() {
   const price = variant.prices[0]
   const isDustProduct = product.tags.some((t) => t.value === 'dust-only')
   const canAfford = price ? dustBalance >= price.amount * quantity : false
-  const isInCart = cartItem !== null
 
   return (
     <main className="min-h-screen p-8 bg-gray-50">
@@ -287,11 +286,12 @@ export default function ProductDetailPage() {
 
             {/* Quantity Selector */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="quantity-input" className="block text-sm font-medium text-gray-700 mb-2">
                 Quantity
               </label>
               <div className="flex items-center gap-4">
                 <button
+                  type="button"
                   onClick={decrementQuantity}
                   disabled={quantity <= MIN_QUANTITY || updating}
                   className="w-10 h-10 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -299,6 +299,7 @@ export default function ProductDetailPage() {
                   −
                 </button>
                 <input
+                  id="quantity-input"
                   type="number"
                   min={MIN_QUANTITY}
                   max={MAX_QUANTITY}
@@ -307,56 +308,31 @@ export default function ProductDetailPage() {
                     const newQty = parseInt(e.target.value) || MIN_QUANTITY
                     const clampedQty = clamp(newQty, MIN_QUANTITY, MAX_QUANTITY)
                     setQuantity(clampedQty)
-                    if (cartItem) {
-                      handleUpdateQuantity(clampedQty)
-                    }
                   }}
                   className="w-20 text-center border border-gray-300 rounded-lg px-3 py-2 text-lg font-semibold"
                   disabled={updating}
                 />
                 <button
+                  type="button"
                   onClick={incrementQuantity}
                   disabled={quantity >= MAX_QUANTITY || updating}
                   className="w-10 h-10 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   +
                 </button>
-                {isInCart && (
-                  <span className="text-sm text-green-600 font-medium">
-                    In cart ({cartItem.quantity} {cartItem.quantity === 1 ? 'item' : 'items'})
-                  </span>
-                )}
               </div>
             </div>
 
             {/* Action Buttons */}
             <div className="flex gap-4">
-              {isInCart ? (
-                <>
-                  <button
-                    onClick={() => handleUpdateQuantity(quantity)}
-                    disabled={updating || (isDustProduct && !canAfford)}
-                    className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {updating ? 'Updating...' : 'Update Cart'}
-                  </button>
-                  <button
-                    onClick={handleRemoveFromCart}
-                    disabled={updating}
-                    className="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Remove from Cart
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={handleAddToCart}
-                  disabled={updating || (isDustProduct && !canAfford)}
-                  className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {updating ? 'Adding...' : isDustProduct ? 'Add to Cart (Dust)' : 'Add to Cart'}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleAddToCart}
+                disabled={updating || (isDustProduct && !canAfford)}
+                className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {updating ? 'Adding...' : isDustProduct ? 'Add to Cart (Dust)' : 'Add to Cart'}
+              </button>
             </div>
 
             {/* Total Price */}

@@ -63,7 +63,7 @@ export async function sendOrderConfirmationEmail(
 
         console.log('✅ Email sent successfully via Resend:', result)
         return { success: true }
-      } catch (resendError: any) {
+      } catch (resendError: unknown) {
         console.error('❌ Resend error:', resendError)
         // Fall through to logging
       }

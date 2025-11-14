@@ -29,7 +29,7 @@ export class CartCalculator {
       return CURRENCY_CODES.USD
     }
 
-    const currencies = [...new Set(items.map(item => item.price.currency_code))]
+    const currencies = Array.from(new Set(items.map(item => item.price.currency_code)))
     
     if (currencies.length > 1) {
       return CURRENCY_CODES.MIXED
@@ -149,6 +149,6 @@ export function hasMixedCurrencies(cart: Cart): boolean {
  * Gets unique currencies from cart items
  */
 export function getCartCurrencies(cart: Cart): string[] {
-  return [...new Set(cart.items.map(item => item.price.currency_code))]
+  return Array.from(new Set(cart.items.map(item => item.price.currency_code)))
 }
 

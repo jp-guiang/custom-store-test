@@ -52,7 +52,7 @@ export function clamp(value: number, min: number, max: number): number {
  * @returns Unique ID string
  */
 export function generateId(prefix?: string): string {
-  const id = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const id = `${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
   return prefix ? `${prefix}_${id}` : id
 }
 

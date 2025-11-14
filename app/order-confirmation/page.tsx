@@ -44,7 +44,10 @@ export default function OrderConfirmationPage() {
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                aria-label="Order confirmed"
+                role="img"
               >
+                <title>Order confirmed</title>
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"

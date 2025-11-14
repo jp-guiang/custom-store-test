@@ -1,14 +1,34 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getCart, clearCart, getOrCreateCart, hasMixedCurrencies, getCartCurrencies } from '@/lib/cart'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { getCart, clearCart, getOrCreateCart, hasMixedCurrencies, getCartCurrencies, carts } from '@/lib/cart'
 import { processDustPayment, getUserDustBalance } from '@/lib/dust-payment'
 import { sendOrderConfirmationEmail } from '@/lib/email'
-import { TEST_USER_ID } from '@/lib/constants'
+import { TEST_USER_ID, CART_COOKIE_NAME } from '@/lib/constants'
 import { CheckoutService } from '@/lib/services/checkout.service'
-import type { CustomerDetails, ShippingAddress } from '@/lib/types'
+import type { Order } from '@/lib/types'
 
-// Import carts map for debugging (POC only)
-// In production, this would be in a database
-import { carts } from '@/lib/cart'
+/**
+ * Helper function to send order confirmation email
+ * Following DRY principle - eliminates duplication
+ */
+async function sendOrderConfirmationEmailForOrder(
+  order: Order,
+  email?: string
+): Promise<void> {
+  if (!email) return
+
+  await sendOrderConfirmationEmail(
+    email,
+    order.id,
+    order.total,
+    order.currency,
+    order.items.map(item => ({
+      title: item.title,
+      quantity: item.quantity,
+      price: item.price.amount,
+    }))
+  )
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -122,19 +142,7 @@ export async function POST(request: NextRequest) {
       clearCart(cartId)
 
       // Send order confirmation email
-      if (customer?.email) {
-        await sendOrderConfirmationEmail(
-          customer.email,
-          order.id,
-          order.total,
-          order.currency,
-          order.items.map(item => ({
-            title: item.title,
-            quantity: item.quantity,
-            price: item.price.amount,
-          }))
-        )
-      }
+      await sendOrderConfirmationEmailForOrder(order, customer?.email)
 
       return NextResponse.json({
         success: true,
@@ -156,19 +164,7 @@ export async function POST(request: NextRequest) {
       clearCart(cartId)
 
       // Send order confirmation email
-      if (customer?.email) {
-        await sendOrderConfirmationEmail(
-          customer.email,
-          order.id,
-          order.total,
-          order.currency,
-          order.items.map(item => ({
-            title: item.title,
-            quantity: item.quantity,
-            price: item.price.amount,
-          }))
-        )
-      }
+      await sendOrderConfirmationEmailForOrder(order, customer?.email)
 
       return NextResponse.json({
         success: true,

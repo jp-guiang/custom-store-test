@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 import {
   getOrCreateCart,
   addToCart,
@@ -6,6 +7,7 @@ import {
   updateCartItemQuantity,
   getCart,
 } from '@/lib/cart'
+import type { Cart } from '@/lib/types'
 import { CART_COOKIE_NAME, CART_COOKIE_MAX_AGE, CURRENCY_CODES } from '@/lib/constants'
 import { generateId } from '@/lib/utils'
 
@@ -48,7 +50,7 @@ export async function POST(request: NextRequest) {
       cartId = generateId('cart')
     }
 
-    let cart
+    let cart: Cart
 
     switch (action) {
       case 'add':

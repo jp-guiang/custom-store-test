@@ -1,15 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import type { Product, CartItem } from '@/lib/types'
+import { useEffect, useState, useCallback } from 'react'
+import type { Product } from '@/lib/types'
 import { formatPrice } from '@/lib/utils'
 import { MIN_QUANTITY, MAX_QUANTITY } from '@/lib/constants'
 import { clamp } from '@/lib/utils'
+import { dispatchCartUpdate } from '@/lib/api-client'
 
 export default function ProductsPage() {
-  const router = useRouter()
   const [products, setProducts] = useState<Product[]>([])
   const [dustBalance, setDustBalance] = useState<number>(0)
   const [loading, setLoading] = useState(true)
@@ -18,30 +17,32 @@ export default function ProductsPage() {
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [cartItems, setCartItems] = useState<Record<string, { id: string; quantity: number }>>({})
 
-  useEffect(() => {
-    fetchProducts()
-    fetchDustBalance()
-    fetchCart()
-
-    // Check for success parameter in URL
-    const urlParams = new URLSearchParams(window.location.search)
-    if (urlParams.get('order') === 'success') {
-      setShowSuccess(true)
-      // Clear the URL parameter
-      window.history.replaceState({}, '', '/products')
-      // Hide success message after 5 seconds
-      setTimeout(() => setShowSuccess(false), 5000)
+  const fetchCart = useCallback(async () => {
+    try {
+      const res = await fetch('/api/cart', {
+        credentials: 'include',
+      })
+      const data = await res.json()
+      const cart = data.cart
+      
+        if (cart?.items) {
+          const itemsMap: Record<string, { id: string; quantity: number }> = {}
+          const quantitiesMap: Record<string, number> = {}
+          
+          cart.items.forEach((item: { id: string; title: string; quantity: number }) => {
+            itemsMap[item.title] = { id: item.id, quantity: item.quantity }
+            quantitiesMap[item.title] = item.quantity
+          })
+          
+          setCartItems(itemsMap)
+          setQuantities(quantitiesMap)
+        }
+    } catch (error) {
+      console.error('Error fetching cart:', error)
     }
-
-    // Listen for cart updates
-    const handleCartUpdate = () => {
-      fetchCart()
-    }
-    window.addEventListener('cartUpdated', handleCartUpdate)
-    return () => window.removeEventListener('cartUpdated', handleCartUpdate)
   }, [])
 
-  async function fetchProducts() {
+  const fetchProducts = useCallback(async () => {
     try {
       const res = await fetch('/api/products')
       const data = await res.json()
@@ -51,10 +52,9 @@ export default function ProductsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-
-  async function fetchDustBalance() {
+  const fetchDustBalance = useCallback(async () => {
     try {
       const res = await fetch('/api/dust-balance')
       const data = await res.json()
@@ -62,32 +62,35 @@ export default function ProductsPage() {
     } catch (error) {
       console.error('Error fetching dust balance:', error)
     }
-  }
+  }, [])
+  
+  useEffect(() => {
+    fetchProducts()
+    fetchDustBalance()
+    fetchCart()
 
-  async function fetchCart() {
-    try {
-      const res = await fetch('/api/cart', {
-        credentials: 'include',
-      })
-      const data = await res.json()
-      const cart = data.cart
-      
-      if (cart && cart.items) {
-        const itemsMap: Record<string, { id: string; quantity: number }> = {}
-        const quantitiesMap: Record<string, number> = {}
-        
-        cart.items.forEach((item: { id: string; title: string; quantity: number }) => {
-          itemsMap[item.title] = { id: item.id, quantity: item.quantity }
-          quantitiesMap[item.title] = item.quantity
-        })
-        
-        setCartItems(itemsMap)
-        setQuantities(quantitiesMap)
+    // Check for success parameter in URL
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      if (urlParams.get('order') === 'success') {
+        setShowSuccess(true)
+        // Clear the URL parameter
+        window.history.replaceState({}, '', '/products')
+        // Hide success message after 5 seconds
+        setTimeout(() => setShowSuccess(false), 5000)
       }
-    } catch (error) {
-      console.error('Error fetching cart:', error)
+
+      // Listen for cart updates
+      const handleCartUpdate = () => {
+        fetchCart()
+      }
+      window.addEventListener('cartUpdated', handleCartUpdate)
+      return () => window.removeEventListener('cartUpdated', handleCartUpdate)
     }
-  }
+  }, [fetchCart, fetchProducts, fetchDustBalance])
+
+
+
 
   async function handleAddToCart(product: Product, quantity: number = 1) {
     setAddingToCart(product.id)
@@ -114,8 +117,8 @@ export default function ProductsPage() {
         }),
       })
 
-      const data = await res.json()
-      window.dispatchEvent(new Event('cartUpdated'))
+      await res.json()
+      dispatchCartUpdate()
       await fetchCart()
     } catch (error) {
       console.error('Error adding to cart:', error)
@@ -139,7 +142,7 @@ export default function ProductsPage() {
     }
 
     try {
-      const res = await fetch('/api/cart', {
+      await fetch('/api/cart', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -152,7 +155,7 @@ export default function ProductsPage() {
         }),
       })
 
-      window.dispatchEvent(new Event('cartUpdated'))
+      dispatchCartUpdate()
       await fetchCart()
     } catch (error) {
       console.error('Error updating quantity:', error)
@@ -165,7 +168,7 @@ export default function ProductsPage() {
     if (!cartItem) return
 
     try {
-      const res = await fetch('/api/cart', {
+      await fetch('/api/cart', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -177,7 +180,7 @@ export default function ProductsPage() {
         }),
       })
 
-      window.dispatchEvent(new Event('cartUpdated'))
+      dispatchCartUpdate()
       await fetchCart()
       setQuantities({ ...quantities, [product.title]: 1 })
     } catch (error) {
@@ -222,6 +225,7 @@ export default function ProductsPage() {
             <div className="flex items-center justify-between">
               <span className="font-semibold">✓ Order placed successfully!</span>
               <button
+                type="button"
                 onClick={() => setShowSuccess(false)}
                 className="text-green-700 hover:text-green-900"
               >
@@ -270,7 +274,6 @@ export default function ProductsPage() {
             {fiatProducts.map((product) => {
               const price = product.variants[0]?.prices[0]
               const isAdding = addingToCart === product.id
-              const isInCart = cartItems[product.title] !== undefined
               const quantity = quantities[product.title] || 1
               
               return (
@@ -293,11 +296,12 @@ export default function ProductsPage() {
                   
                   {/* Quantity Selector */}
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor={`quantity-${product.id}`} className="block text-sm font-medium text-gray-700 mb-2">
                       Quantity
                     </label>
                     <div className="flex items-center gap-2">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.preventDefault()
                           e.stopPropagation()
@@ -309,6 +313,7 @@ export default function ProductsPage() {
                         −
                       </button>
                       <input
+                        id={`quantity-${product.id}`}
                         type="number"
                         min={MIN_QUANTITY}
                         max={MAX_QUANTITY}
@@ -322,6 +327,7 @@ export default function ProductsPage() {
                         className="w-16 text-center border border-gray-300 rounded px-2 py-1"
                       />
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.preventDefault()
                           e.stopPropagation()
@@ -336,27 +342,16 @@ export default function ProductsPage() {
                   </div>
 
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
-                      if (isInCart) {
-                        handleRemoveFromCart(product)
-                      } else {
-                        handleAddToCart(product, quantity)
-                      }
+                      handleAddToCart(product, quantity)
                     }}
                     disabled={isAdding}
-                    className={`w-full px-6 py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                      isInCart
-                        ? 'bg-red-600 text-white hover:bg-red-700'
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}
+                    className="w-full px-6 py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-blue-600 text-white hover:bg-blue-700"
                   >
-                    {isAdding
-                      ? 'Adding...'
-                      : isInCart
-                      ? 'Remove from Cart'
-                      : 'Add to Cart'}
+                    {isAdding ? 'Adding...' : 'Add to Cart'}
                   </button>
                 </Link>
               )
@@ -373,7 +368,6 @@ export default function ProductsPage() {
             {dustProducts.map((product) => {
               const price = product.variants[0]?.prices[0]
               const isAdding = addingToCart === product.id
-              const isInCart = cartItems[product.title] !== undefined
               const quantity = quantities[product.title] || 1
               const canAfford = price ? dustBalance >= price.amount * quantity : false
               
@@ -406,11 +400,12 @@ export default function ProductsPage() {
 
                   {/* Quantity Selector */}
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor={`quantity-${product.id}`} className="block text-sm font-medium text-gray-700 mb-2">
                       Quantity
                     </label>
                     <div className="flex items-center gap-2">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.preventDefault()
                           e.stopPropagation()
@@ -422,6 +417,7 @@ export default function ProductsPage() {
                         −
                       </button>
                       <input
+                        id={`quantity-${product.id}`}
                         type="number"
                         min={MIN_QUANTITY}
                         max={MAX_QUANTITY}
@@ -435,6 +431,7 @@ export default function ProductsPage() {
                         className="w-16 text-center border border-gray-300 rounded px-2 py-1"
                       />
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.preventDefault()
                           e.stopPropagation()
@@ -449,27 +446,16 @@ export default function ProductsPage() {
                   </div>
 
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
-                      if (isInCart) {
-                        handleRemoveFromCart(product)
-                      } else {
-                        handleAddToCart(product, quantity)
-                      }
+                      handleAddToCart(product, quantity)
                     }}
                     disabled={isAdding || !canAfford}
-                    className={`w-full px-6 py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                      isInCart
-                        ? 'bg-red-600 text-white hover:bg-red-700'
-                        : 'bg-yellow-500 text-white hover:bg-yellow-600'
-                    }`}
+                    className="w-full px-6 py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-yellow-500 text-white hover:bg-yellow-600"
                   >
-                    {isAdding
-                      ? 'Adding...'
-                      : isInCart
-                      ? 'Remove from Cart'
-                      : 'Buy with Dust'}
+                    {isAdding ? 'Adding...' : 'Buy with Dust'}
                   </button>
                 </Link>
               )

@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import type { Cart, CartItem } from '@/lib/types'
+import type { Cart } from '@/lib/types'
 import { formatPriceShort } from '@/lib/utils'
 import { CURRENCY_CODES } from '@/lib/constants'
 
@@ -13,6 +13,18 @@ export default function CartIcon() {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
+  const fetchCart = useCallback(async () => {
+    try {
+      const res = await fetch('/api/cart', { cache: 'no-store' })
+      const data = await res.json()
+      if (data.cart) {
+        setCart(data.cart)
+      }
+    } catch (error) {
+      console.error('Error fetching cart:', error)
+    }
+  }, [])
+
   useEffect(() => {
     fetchCart()
     
@@ -20,7 +32,10 @@ export default function CartIcon() {
     const handleCartUpdate = () => {
       fetchCart()
     }
-    window.addEventListener('cartUpdated', handleCartUpdate)
+    
+    if (typeof window !== 'undefined') {
+      window.addEventListener('cartUpdated', handleCartUpdate)
+    }
     
     // Refresh cart every 2 seconds when dropdown is open
     const interval = setInterval(() => {
@@ -31,9 +46,11 @@ export default function CartIcon() {
     
     return () => {
       clearInterval(interval)
-      window.removeEventListener('cartUpdated', handleCartUpdate)
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('cartUpdated', handleCartUpdate)
+      }
     }
-  }, [isOpen])
+  }, [isOpen, fetchCart])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -42,21 +59,12 @@ export default function CartIcon() {
         setIsOpen(false)
       }
     }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  async function fetchCart() {
-    try {
-      const res = await fetch('/api/cart', { cache: 'no-store' })
-      const data = await res.json()
-      if (data.cart) {
-        setCart(data.cart)
-      }
-    } catch (error) {
-      console.error('Error fetching cart:', error)
+    
+    if (typeof document !== 'undefined') {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }
+  }, [])
 
   async function handleRemoveFromCart(itemId: string) {
     try {
@@ -91,6 +99,7 @@ export default function CartIcon() {
   return (
     <div className="relative" ref={dropdownRef}>
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="relative p-2 text-gray-700 hover:text-gray-900 transition-colors"
         aria-label="Shopping cart"
@@ -100,6 +109,8 @@ export default function CartIcon() {
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
+          aria-label="Shopping cart"
+          role="img"
         >
           <path
             strokeLinecap="round"
@@ -132,7 +143,7 @@ export default function CartIcon() {
                 Continue Shopping
               </Link>
             </div>
-          ) : (
+          ) : cart ? (
             <>
               {/* Mixed currency warning */}
               {cart.currency === CURRENCY_CODES.MIXED && (
@@ -159,6 +170,7 @@ export default function CartIcon() {
                         </p>
                       </div>
                       <button
+                        type="button"
                         onClick={() => handleRemoveFromCart(item.id)}
                         className="ml-4 text-red-600 hover:text-red-800 text-sm"
                         aria-label="Remove item"
@@ -181,6 +193,7 @@ export default function CartIcon() {
                   </span>
                 </div>
                 <button
+                  type="button"
                   onClick={handleProceedToCheckout}
                   disabled={cart.currency === CURRENCY_CODES.MIXED}
                   className="w-full bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -191,7 +204,7 @@ export default function CartIcon() {
                 </button>
               </div>
             </>
-          )}
+          ) : null}
         </div>
       )}
     </div>
