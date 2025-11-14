@@ -1,5 +1,6 @@
 // Inventory management for POC
-// In production, this would use Medusa's Inventory Module
+// Simple in-memory storage (no database needed)
+// When database is ready, we'll switch to embedded Medusa Inventory Module
 
 interface InventoryItem {
   variantId: string
@@ -9,11 +10,10 @@ interface InventoryItem {
 }
 
 // In-memory inventory storage for POC
-// In production, this would be in database via Medusa Inventory Module
 const inventory: Map<string, InventoryItem> = new Map()
 
-// Initialize inventory from products
-export function initializeInventory(products: Array<{
+// Initialize inventory from products (simple in-memory)
+export async function initializeInventory(products: Array<{
   id: string
   variants: Array<{
     id: string
@@ -21,6 +21,7 @@ export function initializeInventory(products: Array<{
     inventory_quantity: number
   }>
 }>) {
+  // Simple in-memory initialization
   products.forEach(product => {
     product.variants.forEach(variant => {
       inventory.set(variant.id, {
@@ -31,13 +32,15 @@ export function initializeInventory(products: Array<{
       })
     })
   })
+  
+  return Array.from(inventory.values())
 }
 
-export function getInventory(variantId: string): InventoryItem | null {
+export function getInventory(variantId: string, sku: string) {
   return inventory.get(variantId) || null
 }
 
-export function checkAvailability(variantId: string, requestedQuantity: number): boolean {
+export function checkAvailability(variantId: string, sku: string, requestedQuantity: number): boolean {
   const item = inventory.get(variantId)
   if (!item) return false
   
@@ -45,11 +48,11 @@ export function checkAvailability(variantId: string, requestedQuantity: number):
   return availableQuantity >= requestedQuantity
 }
 
-export function reserveInventory(variantId: string, quantity: number): boolean {
+export function reserveInventory(variantId: string, sku: string, quantity: number): boolean {
   const item = inventory.get(variantId)
   if (!item) return false
   
-  if (!checkAvailability(variantId, quantity)) {
+  if (!checkAvailability(variantId, sku, quantity)) {
     return false
   }
   
@@ -58,7 +61,7 @@ export function reserveInventory(variantId: string, quantity: number): boolean {
   return true
 }
 
-export function releaseInventory(variantId: string, quantity: number): void {
+export function releaseInventory(variantId: string, sku: string, quantity: number): void {
   const item = inventory.get(variantId)
   if (!item) return
   
@@ -66,7 +69,7 @@ export function releaseInventory(variantId: string, quantity: number): void {
   inventory.set(variantId, item)
 }
 
-export function fulfillInventory(variantId: string, quantity: number): boolean {
+export function fulfillInventory(variantId: string, sku: string, quantity: number): boolean {
   const item = inventory.get(variantId)
   if (!item) return false
   
@@ -80,7 +83,7 @@ export function fulfillInventory(variantId: string, quantity: number): boolean {
   return true
 }
 
-export function getAvailableQuantity(variantId: string): number {
+export function getAvailableQuantity(variantId: string, sku: string): number {
   const item = inventory.get(variantId)
   if (!item) return 0
   

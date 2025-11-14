@@ -143,13 +143,58 @@ describe('addToCart', () => {
 ---
 
 ### `lib/inventory.ts` - **Testable with Isolation** ✅
-- ✅ All functions testable (isolate Map)
+- ✅ `initializeInventory()` - Testable (isolate Map)
+- ✅ `getInventory()` - Testable (isolate Map)
+- ✅ `checkAvailability()` - Testable (isolate Map)
+- ✅ `reserveInventory()` - Testable (isolate Map)
+- ✅ `releaseInventory()` - Testable (isolate Map)
+- ✅ `fulfillInventory()` - Testable (isolate Map)
+- ✅ `getAvailableQuantity()` - Testable (isolate Map)
 
-**Note:** inventory Map is not exported. Same options as orders.
+**Note:** inventory Map is not exported. For testing, you'd need to:
+1. Export it (for POC testing)
+2. Or add reset functions like `resetInventoryStorage()`
+3. Or use dependency injection (better for production)
+
+**Current State:** Uses simple in-memory Map. When switching to Medusa Inventory Module, will need to mock module methods.
+
+---
+
+### `lib/medusa.ts` - **Testable** ✅
+- ✅ `getProductsFromMedusa()` - Returns hardcoded products (pure function)
+- ✅ `seedProducts()` - Pure function, returns hardcoded data
+- ⚠️ When switching to Medusa modules: Will need to mock `getProductModule()`
+
+**Current State:** Uses hardcoded products - fully testable without mocks.
+
+**Future State:** When using embedded Medusa Product Module, will need to mock module initialization.
 
 ---
 
 ## ⚠️ Testable with Mocking
+
+### `lib/medusa-modules.ts` - **Testable with Mocks** ⚠️
+- ⚠️ `initializeMedusaModules()` - Needs mocking of `loadModules()`
+- ⚠️ `getProductModule()` - Needs mocking of module initialization
+- ⚠️ `getInventoryModule()` - Needs mocking of module initialization
+
+**Test Example:**
+```typescript
+import { initializeMedusaModules } from '@/lib/medusa-modules'
+import { loadModules } from '@medusajs/modules-sdk'
+
+jest.mock('@medusajs/modules-sdk')
+
+describe('initializeMedusaModules', () => {
+  it('initializes modules', async () => {
+    const mockModules = { modules: { product: {} } }
+    ;(loadModules as jest.Mock).mockResolvedValue(mockModules)
+    
+    const result = await initializeMedusaModules()
+    expect(result).toBeDefined()
+  })
+})
+```
 
 ### `lib/services/checkout.service.ts` - **Testable with Mocks** ✅
 - ✅ `cartItemsToOrderItems()` - Pure function, fully testable

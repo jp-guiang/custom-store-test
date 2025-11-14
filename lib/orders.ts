@@ -1,7 +1,7 @@
 // Order management for POC
 // In production, this would use Medusa Order Module
 
-import type { Order, OrderItem, CustomerDetails, ShippingAddress } from './types'
+import type { Order, OrderItem, CustomerDetails, ShippingAddress, OrderTracking } from './types'
 import { generateId } from './utils'
 
 // In-memory order storage for POC
@@ -58,6 +58,28 @@ export function updateOrderStatus(
   order.updatedAt = new Date().toISOString()
   orders.set(orderId, order)
 
+  return order
+}
+
+export function updateOrderTracking(
+  orderId: string,
+  tracking: OrderTracking
+): Order | null {
+  const order = orders.get(orderId)
+  if (!order) return null
+
+  order.tracking = { ...order.tracking, ...tracking }
+  order.updatedAt = new Date().toISOString()
+  
+  // Auto-update status based on tracking
+  if (tracking.shippedAt && !order.tracking?.shippedAt) {
+    order.status = 'shipped'
+  }
+  if (tracking.deliveredAt) {
+    order.status = 'delivered'
+  }
+  
+  orders.set(orderId, order)
   return order
 }
 

@@ -64,17 +64,27 @@ export interface OrderItem {
   price: Price
 }
 
+export interface OrderTracking {
+  trackingNumber?: string
+  carrier?: string
+  trackingUrl?: string
+  estimatedDelivery?: string
+  shippedAt?: string
+  deliveredAt?: string
+}
+
 export interface Order {
   id: string
   userId: string
   items: OrderItem[]
   total: number
   currency: string
-  status: 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled'
+  status: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'completed' | 'cancelled'
   paymentMethod: 'dust' | 'fiat'
   transactionId?: string
   customer?: CustomerDetails
   shippingAddress?: ShippingAddress
+  tracking?: OrderTracking
   createdAt: string
   updatedAt: string
 }

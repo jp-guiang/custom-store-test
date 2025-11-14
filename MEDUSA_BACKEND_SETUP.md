@@ -1,14 +1,145 @@
-# Medusa Backend Setup Guide
+# Medusa Integration Guide
 
-Complete guide to setting up Medusa backend with Admin Dashboard for inventory management, product management, and order processing.
+Complete guide for integrating Medusa.js with your Next.js application. Two approaches available: **Embedded Modules** (recommended) or **Separate Backend**.
 
-**Documentation:** [Medusa.js Docs](https://docs.medusajs.com/) | [Getting Started](https://docs.medusajs.com/resources/getting-started) | [Admin Dashboard](https://docs.medusajs.com/user-guide/admin/overview)
+**Documentation:** [Medusa.js Docs](https://docs.medusajs.com/) | [Getting Started](https://docs.medusajs.com/resources/getting-started) | [Modules SDK](https://docs.medusajs.com/resources/commerce-modules/overview)
 
 ---
 
 ## Overview
 
 **No Medusa account needed!** Medusa is open-source and self-hosted. You generate all secrets locally and set up your own database.
+
+### Two Integration Approaches
+
+#### 🎯 **Option 1: Embedded Modules** (Current Setup - Recommended)
+- ✅ **Runs in Next.js** - No separate backend server needed
+- ✅ **Same Next.js process** - Lower latency, simpler deployment
+- ✅ **Direct module access** - Use Medusa modules programmatically
+- ✅ **Database optional** - Can start with in-memory, add database later
+- ✅ **Perfect for POC** - Quick setup, easy to test
+
+#### 🏗️ **Option 2: Separate Backend** (Full Medusa Server)
+- ✅ **Admin Dashboard** - Built-in admin panel at `http://localhost:9000/app`
+- ✅ **Product Management** - Add, edit, delete products through UI
+- ✅ **Inventory Management** - Track stock levels, reservations, fulfillment
+- ✅ **Order Management** - View and process orders
+- ✅ **Customer Management** - View customer data
+- ✅ **No Custom Admin Needed** - Everything included!
+- ⚠️ Requires separate server process
+- ⚠️ Requires PostgreSQL database
+
+---
+
+## 🎯 Option 1: Embedded Medusa Modules (Current Setup)
+
+**Documentation:** [Medusa Modules SDK](https://docs.medusajs.com/resources/commerce-modules/overview) | [Embedded Modules](https://docs.medusajs.com/resources/commerce-modules/overview)
+
+### What You Have Now
+
+Your project is currently set up with **Embedded Medusa Modules**:
+
+- ✅ **Product Module** - `@medusajs/product` initialized in `lib/medusa-modules.ts`
+- ✅ **Inventory Module** - `@medusajs/inventory` initialized
+- ✅ **Pricing Module** - `@medusajs/pricing` initialized
+- ✅ **Currency Module** - `@medusajs/currency` initialized
+- ✅ **In-memory storage** - No database needed for testing
+- ✅ **Hardcoded products** - 5 products ready to test
+
+### Current Architecture
+
+```
+┌─────────────────────────────────────┐
+│      Next.js Application            │
+│  (Port 3000)                        │
+│                                     │
+│  ┌──────────────────────────────┐  │
+│  │  Embedded Medusa Modules      │  │
+│  │  - Product Module            │  │
+│  │  - Inventory Module          │  │
+│  │  - Pricing Module            │  │
+│  │  - Currency Module           │  │
+│  └──────────────────────────────┘  │
+│                                     │
+│  - Products (hardcoded)             │
+│  - Inventory (in-memory)            │
+│  - Cart (in-memory)                 │
+│  - Orders (in-memory)               │
+└─────────────────────────────────────┘
+```
+
+### How It Works
+
+1. **Module Initialization** (`lib/medusa-modules.ts`)
+   - Uses `loadModules()` from `@medusajs/modules-sdk`
+   - Initializes Product, Inventory, Pricing, Currency modules
+   - Creates shared container for dependency injection
+
+2. **Product Management** (`lib/medusa.ts`)
+   - Currently: Returns hardcoded products (no database)
+   - Ready for: Database-backed products when configured
+
+3. **Inventory Management** (`lib/inventory.ts`)
+   - Currently: In-memory Map storage
+   - Ready for: Medusa Inventory Module when database configured
+
+### Adding Database (When Ready)
+
+To switch from in-memory to database-backed:
+
+1. **Install PostgreSQL** (see database setup below)
+
+2. **Update `lib/medusa-modules.ts`:**
+   ```typescript
+   medusaApp = await loadModules({
+     modulesConfig: {
+       [Modules.PRODUCT]: {
+         resolve: "@medusajs/product",
+         options: {
+           database: {
+             clientUrl: process.env.DATABASE_URL,
+             // ... other DB config
+           }
+         },
+       },
+       // ... other modules
+     },
+     sharedContainer,
+     sharedResourcesConfig: {
+       database: {
+         clientUrl: process.env.DATABASE_URL,
+       }
+     },
+   })
+   ```
+
+3. **Update `lib/medusa.ts`:**
+   - Uncomment Medusa module code
+   - Use `productModule.listProducts()` instead of hardcoded
+
+4. **Update `lib/inventory.ts`:**
+   - Uncomment Medusa Inventory Module code
+   - Use `inventoryModule` methods instead of Map
+
+### Benefits of Embedded Approach
+
+- ✅ **Simpler deployment** - One application to deploy
+- ✅ **Lower latency** - No network calls between frontend/backend
+- ✅ **Easier development** - Everything in one codebase
+- ✅ **Flexible** - Can start simple, add complexity later
+- ✅ **Cost effective** - One server instead of two
+
+### Limitations
+
+- ⚠️ **No Admin Dashboard** - Need to build custom admin or use separate backend
+- ⚠️ **Database required** - For production, need PostgreSQL
+- ⚠️ **More code** - Need to wire up modules yourself
+
+---
+
+## 🏗️ Option 2: Separate Medusa Backend
+
+**Documentation:** [Medusa Backend Setup](https://docs.medusajs.com/resources/getting-started) | [Admin Dashboard](https://docs.medusajs.com/user-guide/admin/overview)
 
 ### What You Get
 
@@ -19,12 +150,49 @@ Complete guide to setting up Medusa backend with Admin Dashboard for inventory m
 - ✅ **Customer Management** - View customer data
 - ✅ **No Custom Admin Needed** - Everything included!
 
+### Architecture
+
+```
+┌─────────────────┐         ┌──────────────────┐
+│  Next.js App    │────────▶│  Medusa Backend  │
+│  (Port 3000)    │  API    │  (Port 9000)     │
+│                 │         │                  │
+│  - Products     │         │  - Products      │
+│  - Cart         │         │  - Cart          │
+│  - Checkout     │         │  - Orders        │
+│  - Frontend UI  │         │  - Inventory     │
+└─────────────────┘         └──────────────────┘
+                                      │
+                                      ▼
+                            ┌──────────────────┐
+                            │  Medusa Admin    │
+                            │  (Port 9000/app) │
+                            │                  │
+                            │  - Manage Products│
+                            │  - Manage Orders │
+                            │  - Inventory     │
+                            └──────────────────┘
+```
+
+### When to Use Separate Backend
+
+- ✅ Need admin dashboard immediately
+- ✅ Multiple frontends (web, mobile, etc.)
+- ✅ Team members need admin access
+- ✅ Want full Medusa features out of the box
+
 ---
 
 ## Prerequisites
 
+### For Embedded Modules (Current Setup)
+- ✅ Node.js 18+ installed
+- ✅ Already installed: `@medusajs/modules-sdk`, `@medusajs/product`, `@medusajs/inventory`, etc.
+- ⚠️ PostgreSQL (optional for POC, required for production)
+
+### For Separate Backend
 - Node.js 18+ installed
-- PostgreSQL database (local or cloud)
+- PostgreSQL database (local or cloud) - **Required**
 - Redis (optional, but recommended)
 
 **Documentation:** [Medusa Prerequisites](https://docs.medusajs.com/resources/getting-started/prerequisites)
@@ -266,7 +434,7 @@ MEDUSA_BACKEND_URL=http://localhost:9000
 
 ---
 
-## Step 4: Connect Next.js Frontend
+## Step 4: Connect Next.js Frontend to Separate Backend
 
 **Documentation:** [Medusa JS SDK](https://docs.medusajs.com/resources/js-client/overview)
 
@@ -274,29 +442,49 @@ MEDUSA_BACKEND_URL=http://localhost:9000
 
 Add to your Next.js `.env.local`:
 ```env
-# Medusa Backend URL
+# Medusa Backend URL (for separate backend approach)
 NEXT_PUBLIC_MEDUSA_BACKEND_URL=http://localhost:9000
 MEDUSA_BACKEND_URL=http://localhost:9000
 ```
 
-### Code Already Supports Backend!
+### Switch to Backend Mode
 
-Your code already supports Medusa backend connection:
+To use separate backend instead of embedded modules:
 
-- ✅ `lib/medusa.ts` - Automatically tries backend first, falls back to hardcoded products
-- ✅ `app/api/products/route.ts` - Fetches from backend if available
+1. **Update `lib/medusa.ts`:**
+   ```typescript
+   import Medusa from "@medusajs/js-sdk"
+   
+   export const medusa = new Medusa({
+     baseUrl: process.env.MEDUSA_BACKEND_URL || "http://localhost:9000",
+   })
+   
+   export async function getProductsFromMedusa() {
+     try {
+       const { products } = await medusa.store.product.list()
+       return products
+     } catch (error) {
+       console.warn('Medusa backend not available:', error)
+       return seedProducts() // Fallback
+     }
+   }
+   ```
 
-**How it works:**
-1. Set `MEDUSA_BACKEND_URL` in `.env.local`
-2. Products automatically fetch from backend
-3. Falls back to hardcoded products if backend unavailable
+2. **Verify Connection:**
+   - Start Medusa backend: `npm run start` (in `medusa-backend/` folder)
+   - Start Next.js app: `npm run dev` (in your project folder)
+   - Visit products page - should show products from backend
+   - Check browser console/network tab to verify API calls
 
-### Verify Connection
+### Current Setup (Embedded Modules)
 
-1. Start Medusa backend: `npm run start` (in `medusa-backend/` folder)
-2. Start Next.js app: `npm run dev` (in your project folder)
-3. Visit products page - should show products from backend
-4. Check browser console/network tab to verify API calls
+**Your current setup uses embedded modules** - no separate backend needed!
+
+- ✅ Products: Hardcoded in `lib/medusa.ts` (5 products)
+- ✅ Inventory: In-memory storage in `lib/inventory.ts`
+- ✅ Modules: Initialized in `lib/medusa-modules.ts` (ready for database)
+- ✅ No backend server required
+- ✅ No database required for testing
 
 ---
 
@@ -322,29 +510,23 @@ You'll need to extend Medusa's currency module to support custom currencies. Thi
 
 ---
 
-## Architecture Overview
+## Comparison: Embedded vs Separate Backend
 
-```
-┌─────────────────┐         ┌──────────────────┐
-│  Next.js App    │────────▶│  Medusa Backend  │
-│  (Port 3000)    │  API    │  (Port 9000)     │
-│                 │         │                  │
-│  - Products     │         │  - Products      │
-│  - Cart         │         │  - Cart          │
-│  - Checkout     │         │  - Orders        │
-│  - Frontend UI  │         │  - Inventory     │
-└─────────────────┘         └──────────────────┘
-                                      │
-                                      ▼
-                            ┌──────────────────┐
-                            │  Medusa Admin    │
-                            │  (Port 9000/app) │
-                            │                  │
-                            │  - Manage Products│
-                            │  - Manage Orders │
-                            │  - Inventory     │
-                            └──────────────────┘
-```
+| Feature | Embedded Modules | Separate Backend |
+|--------|-----------------|------------------|
+| **Setup Complexity** | ⭐⭐ Simple | ⭐⭐⭐ Moderate |
+| **Database Required** | Optional (POC) | Required |
+| **Admin Dashboard** | ❌ No (build custom) | ✅ Yes (built-in) |
+| **Deployment** | Single app | Two apps |
+| **Latency** | Lower (no network) | Higher (API calls) |
+| **Development** | Easier (one codebase) | More complex (two codebases) |
+| **Best For** | POC, Single app | Production, Multiple frontends |
+
+### Recommendation
+
+- **Start with Embedded** - Current setup, easy to test
+- **Add Database Later** - When ready for production
+- **Switch to Backend** - If you need admin dashboard or multiple frontends
 
 ---
 
@@ -383,25 +565,47 @@ You'll need to extend Medusa's currency module to support custom currencies. Thi
 ### Q: Do I need a Medusa account?
 **A:** No! Medusa is open-source and self-hosted. No account needed.
 
+### Q: Which approach should I use?
+**A:** 
+- **Embedded Modules** - For POC, single app, quick testing
+- **Separate Backend** - For production, admin dashboard, multiple frontends
+
 ### Q: Can I use PlanetScale/MySQL?
 **A:** No, Medusa requires PostgreSQL. Use separate databases - PlanetScale for your website, PostgreSQL for Medusa.
 
+### Q: Do I need a database for embedded modules?
+**A:** Not for POC/testing. Required for production. You can start with in-memory storage.
+
 ### Q: Do I need Redis?
-**A:** Not for POC/testing. Recommended for production.
+**A:** Not for POC/testing. Recommended for production (both approaches).
 
 ### Q: Can I use SQLite?
-**A:** No, Medusa requires PostgreSQL.
+**A:** No, Medusa requires PostgreSQL (when using database).
 
 ### Q: How do I get the secrets?
-**A:** Generate them yourself using `openssl rand -base64 32`
+**A:** Generate them yourself using `openssl rand -base64 32` (only needed for separate backend)
 
 ### Q: Do I need to build an admin panel?
-**A:** No! Medusa Admin is included. Just set up the backend and access it at `http://localhost:9000/app`
+**A:** 
+- **Embedded Modules** - Yes, or use separate backend for admin
+- **Separate Backend** - No! Medusa Admin is included at `http://localhost:9000/app`
+
+### Q: Can I switch between approaches?
+**A:** Yes! Your code supports both. Update `lib/medusa.ts` to switch between embedded modules and SDK client.
 
 ---
 
 ## Next Steps
 
+### For Embedded Modules (Current Setup)
+1. ✅ Modules initialized in `lib/medusa-modules.ts`
+2. ✅ Hardcoded products working (5 products)
+3. ✅ In-memory inventory working
+4. 🔄 Add PostgreSQL database (when ready for production)
+5. 🔄 Uncomment Medusa module code in `lib/medusa.ts` and `lib/inventory.ts`
+6. 🔄 Build custom admin panel (or use separate backend for admin)
+
+### For Separate Backend
 1. ✅ Backend running on port 9000
 2. ✅ Admin dashboard accessible
 3. ✅ Frontend connected to backend
