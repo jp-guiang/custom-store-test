@@ -69,6 +69,8 @@ DATABASE_URL=postgres://user:password@host:5432/database
 
 ## Step 2: Configure Embedded Modules in Next.js
 
+**Important:** Embedded Medusa modules handle migrations automatically. When you configure a database connection and initialize the modules, they will create the necessary tables automatically. No manual migration commands needed!
+
 ### Update `lib/medusa-modules.ts`
 
 **Current (no database):**
@@ -330,11 +332,16 @@ openssl rand -base64 32  # For COOKIE_SECRET (run again)
 
 ### Run Migrations
 
+**Important:** For embedded modules in Next.js, migrations happen automatically when modules initialize with a database connection. You don't need to run `medusa db:migrate` in your Next.js project.
+
+**For the separate Medusa backend (admin dashboard only):**
 ```bash
 cd medusa-backend
 npm run build
 npx medusa db:migrate
 ```
+
+**Note:** The `medusa db:migrate` command is ONLY for the separate Medusa backend project, NOT for your Next.js project with embedded modules.
 
 ### Start Backend
 

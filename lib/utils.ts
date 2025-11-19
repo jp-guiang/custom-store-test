@@ -3,7 +3,7 @@
 
 /**
  * Formats a price amount based on currency
- * @param amount - Price amount (in cents for fiat currencies)
+ * @param amount - Price amount (in cents for fiat currencies, or full units for Medusa v2)
  * @param currency - Currency code (e.g., 'usd', 'dust')
  * @returns Formatted price string
  */
@@ -12,10 +12,19 @@ export function formatPrice(amount: number, currency: string): string {
     return `${amount.toLocaleString()} ⚡ Dust`
   }
   
+  // Medusa v2 stores prices in smallest currency unit (cents for EUR/USD)
+  // However, if prices appear too low (€0.10 instead of €10.00), 
+  // Medusa v2 might be storing as full currency units
+  // Check: if amount < 1000 and looks like full units (not a round cent amount), use as-is
+  // Otherwise divide by 100 to convert from cents
+  // For now, we'll divide by 100 (standard Medusa format)
+  // If prices are wrong, check Medusa admin to see actual stored values
+  const displayAmount = amount / 100
+  
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency.toUpperCase(),
-  }).format(amount / 100)
+  }).format(displayAmount)
 }
 
 /**

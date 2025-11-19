@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "seed": "tsx scripts/seed-products-backend.ts",
+    "seed:embedded": "tsx scripts/seed-products.ts"
   },
   "dependencies": {
     "@medusajs/currency": "^2.0.0",
@@ -28,8 +30,11 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "autoprefixer": "^10.4.16",
+    "dotenv": "^17.2.3",
     "postcss": "^8.4.31",
     "tailwindcss": "^3.3.0",
-    "typescript": "^5.0.0"
+    "ts-node": "^10.9.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
   }
 }

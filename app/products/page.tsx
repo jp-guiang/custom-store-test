@@ -89,14 +89,22 @@ export default function ProductsPage() {
     }
   }, [fetchCart, fetchProducts, fetchDustBalance])
 
-
-
-
   async function handleAddToCart(product: Product, quantity: number = 1) {
     setAddingToCart(product.id)
     try {
-      const variant = product.variants[0]
-      const price = variant.prices[0]
+      // Get first variant with a price, or use first variant
+      const variant = product.variants && product.variants.length > 0 
+        ? product.variants.find((v) => v.prices && v.prices.length > 0) || product.variants[0]
+        : null
+      
+      if (!variant) {
+        throw new Error('Product variant not found')
+      }
+
+      const price = variant.prices?.[0]
+      if (!price) {
+        throw new Error('Product price not found')
+      }
 
       const res = await fetch('/api/cart', {
         method: 'POST',
@@ -209,11 +217,16 @@ export default function ProductsPage() {
     )
   }
 
+  // Filter products by tags, but show all products if no tags match
   const fiatProducts = products.filter((p) =>
-    p.tags.some((t) => t.value === 'fiat')
+    p.tags && p.tags.length > 0 
+      ? p.tags.some((t) => t.value === 'fiat')
+      : true // Show products without tags in fiat section
   )
   const dustProducts = products.filter((p) =>
-    p.tags.some((t) => t.value === 'dust-only')
+    p.tags && p.tags.length > 0
+      ? p.tags.some((t) => t.value === 'dust-only')
+      : false // Don't show untagged products in dust section
   )
 
   return (
@@ -272,7 +285,11 @@ export default function ProductsPage() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {fiatProducts.map((product) => {
-              const price = product.variants[0]?.prices[0]
+              // Get first variant with a price, or use first variant
+              const variant = product.variants && product.variants.length > 0 
+                ? product.variants.find((v) => v.prices && v.prices.length > 0) || product.variants[0]
+                : null
+              const price = variant?.prices?.[0]
               const isAdding = addingToCart === product.id
               const quantity = quantities[product.title] || 1
               
@@ -366,7 +383,11 @@ export default function ProductsPage() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {dustProducts.map((product) => {
-              const price = product.variants[0]?.prices[0]
+              // Get first variant with a price, or use first variant
+              const variant = product.variants && product.variants.length > 0 
+                ? product.variants.find((v) => v.prices && v.prices.length > 0) || product.variants[0]
+                : null
+              const price = variant?.prices?.[0]
               const isAdding = addingToCart === product.id
               const quantity = quantities[product.title] || 1
               const canAfford = price ? dustBalance >= price.amount * quantity : false

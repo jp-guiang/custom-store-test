@@ -11,8 +11,8 @@ let container: MedusaContainer | null = null
 
 /**
  * Initialize Medusa modules
- * For POC: Uses in-memory storage
- * For Production: Configure database connection
+ * Uses PostgreSQL database if DATABASE_URL is set, otherwise falls back to in-memory storage
+ * Migrations are handled automatically when database is configured
  */
 export async function initializeMedusaModules() {
   if (medusaApp && container) {
@@ -23,36 +23,60 @@ export async function initializeMedusaModules() {
     // Create shared container
     const sharedContainer = createContainer() as MedusaContainer
     
+    // Get database URL from environment
+    const databaseUrl = process.env.DATABASE_URL
+    
+    if (!databaseUrl) {
+      console.warn("DATABASE_URL not set. Modules will use in-memory storage.")
+    }
+
     // Load modules
     medusaApp = await loadModules({
       modulesConfig: {
         [Modules.PRODUCT]: {
           resolve: "@medusajs/product",
-          options: {
-            // For POC: in-memory storage
-            // For production: add database config
-          },
+          options: databaseUrl ? {
+            database: {
+              clientUrl: databaseUrl,
+              schema: "public",
+            },
+          } : {},
         },
         [Modules.PRICING]: {
           resolve: "@medusajs/pricing",
-          options: {},
+          options: databaseUrl ? {
+            database: {
+              clientUrl: databaseUrl,
+              schema: "public",
+            },
+          } : {},
         },
         [Modules.CURRENCY]: {
           resolve: "@medusajs/currency",
-          options: {},
+          options: databaseUrl ? {
+            database: {
+              clientUrl: databaseUrl,
+              schema: "public",
+            },
+          } : {},
         },
         [Modules.INVENTORY]: {
           resolve: "@medusajs/inventory",
-          options: {
-            // For POC: in-memory storage
-            // For production: add database config
-          },
+          options: databaseUrl ? {
+            database: {
+              clientUrl: databaseUrl,
+              schema: "public",
+            },
+          } : {},
         },
       },
       sharedContainer,
-      sharedResourcesConfig: {
-        // Database config would go here for production
-      },
+      sharedResourcesConfig: databaseUrl ? {
+        database: {
+          clientUrl: databaseUrl,
+          schema: "public",
+        },
+      } : {},
     })
 
     container = sharedContainer
@@ -83,12 +107,15 @@ export async function getMedusaContainer(): Promise<MedusaContainer> {
  */
 export async function getProductModule() {
   const { medusaApp } = await initializeMedusaModules()
-  if (!medusaApp?.modules[Modules.PRODUCT]) {
+  if (!medusaApp) {
+    throw new Error("Medusa app not initialized")
+  }
+  
+  // Access module service via container
+  const productModule = container?.resolve(Modules.PRODUCT)
+  if (!productModule) {
     throw new Error("Product module not initialized")
   }
-  const productModule = Array.isArray(medusaApp.modules[Modules.PRODUCT])
-    ? medusaApp.modules[Modules.PRODUCT][0]
-    : medusaApp.modules[Modules.PRODUCT]
   return productModule
 }
 
@@ -96,13 +123,15 @@ export async function getProductModule() {
  * Get Inventory Module service
  */
 export async function getInventoryModule() {
-  const { medusaApp } = await initializeMedusaModules()
-  if (!medusaApp?.modules[Modules.INVENTORY]) {
+  await initializeMedusaModules()
+  if (!container) {
+    throw new Error("Medusa container not initialized")
+  }
+  
+  const inventoryModule = container.resolve(Modules.INVENTORY)
+  if (!inventoryModule) {
     throw new Error("Inventory module not initialized")
   }
-  const inventoryModule = Array.isArray(medusaApp.modules[Modules.INVENTORY])
-    ? medusaApp.modules[Modules.INVENTORY][0]
-    : medusaApp.modules[Modules.INVENTORY]
   return inventoryModule
 }
 
@@ -110,13 +139,15 @@ export async function getInventoryModule() {
  * Get Pricing Module service
  */
 export async function getPricingModule() {
-  const { medusaApp } = await initializeMedusaModules()
-  if (!medusaApp?.modules[Modules.PRICING]) {
+  await initializeMedusaModules()
+  if (!container) {
+    throw new Error("Medusa container not initialized")
+  }
+  
+  const pricingModule = container.resolve(Modules.PRICING)
+  if (!pricingModule) {
     throw new Error("Pricing module not initialized")
   }
-  const pricingModule = Array.isArray(medusaApp.modules[Modules.PRICING])
-    ? medusaApp.modules[Modules.PRICING][0]
-    : medusaApp.modules[Modules.PRICING]
   return pricingModule
 }
 
@@ -124,13 +155,15 @@ export async function getPricingModule() {
  * Get Currency Module service
  */
 export async function getCurrencyModule() {
-  const { medusaApp } = await initializeMedusaModules()
-  if (!medusaApp?.modules[Modules.CURRENCY]) {
+  await initializeMedusaModules()
+  if (!container) {
+    throw new Error("Medusa container not initialized")
+  }
+  
+  const currencyModule = container.resolve(Modules.CURRENCY)
+  if (!currencyModule) {
     throw new Error("Currency module not initialized")
   }
-  const currencyModule = Array.isArray(medusaApp.modules[Modules.CURRENCY])
-    ? medusaApp.modules[Modules.CURRENCY][0]
-    : medusaApp.modules[Modules.CURRENCY]
   return currencyModule
 }
 
