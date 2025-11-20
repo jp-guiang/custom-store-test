@@ -428,7 +428,6 @@ This section explains **how dust loyalty points are implemented** - both in the 
 
 **Store Endpoints** (public, requires publishable key):
 
-**✅ Currently Used by Storefront:**
 - `GET /store/products-with-metadata` - **PRIMARY**: Fetches all products from admin panel
   - Used in: `lib/medusa-client.ts` (line 55)
   - Falls back to `/store/products` if unavailable
@@ -438,10 +437,6 @@ This section explains **how dust loyalty points are implemented** - both in the 
 - `GET /store/dust/balance` - Get current customer's dust balance
   - Used in: `app/api/dust-balance/route.ts` (line 17)
   - Falls back to in-memory balance if backend unavailable
-
-**❌ Available in Backend but NOT Used by Storefront:**
-- `POST /store/dust/apply-to-cart` - Apply dust to cart (exists in backend, but checkout uses `processDustPayment()` directly)
-- `GET /store/dust/transactions` - Get dust transaction history (exists in backend, but not called from frontend)
 
 **Admin Endpoints** (requires admin token):
 - `POST /admin/products/:id/dust` - Set product dust settings
@@ -578,19 +573,6 @@ export function formatPrice(amount: number, currency: string): string {
 3. Format: `formatPrice(amount, currency_code)` → "$50.00"
 4. Add to cart uses regular price and currency
 
-**Key Code**:
-```typescript
-const fiatProducts = products.filter((p) => {
-  const dustOnlyValue = p.metadata?.dust_only
-  const isDustProduct = dustOnlyValue === true || 
-                        dustOnlyValue === 'true' || 
-                        dustOnlyValue === 1 ||
-                        p.tags?.some(t => t.value === 'dust-only')
-  
-  return !isDustProduct // Show in fiat section
-})
-```
-
 ### Dust Products
 
 **Location**: `app/products/page.tsx`
@@ -601,25 +583,6 @@ const fiatProducts = products.filter((p) => {
 3. Format: `formatPrice(dustPrice, 'dust')` → "1,000 ⚡ Dust"
 4. Show dust balance check before allowing add to cart
 5. Add to cart uses `dust_price` and `currency_code: 'dust'`
-
-**Key Code**:
-```typescript
-const dustProducts = products.filter((p) => {
-  const dustOnlyValue = p.metadata?.dust_only
-  const isDustProduct = dustOnlyValue === true || 
-                        dustOnlyValue === 'true' || 
-                        dustOnlyValue === 1 ||
-                        p.tags?.some(t => t.value === 'dust-only')
-  
-  return isDustProduct // Show in dust section
-})
-
-// When adding to cart:
-if (isDustProduct) {
-  priceAmount = dustPrice // Use dust_price from metadata
-  currencyCode = 'dust'
-}
-```
 
 ### Product Detail Page
 
@@ -645,19 +608,6 @@ if (isDustProduct) {
 2. **Cart currency**: Determined by first product added
 3. **Validation**: `addToCart()` throws error if trying to mix currencies
 
-**Code**:
-```typescript
-// Check if adding a dust product to a cart with fiat products
-const isDustProduct = price.currency_code === 'dust' || price.currency_code === 'xpf'
-const hasFiatItems = cart.items.some(item => 
-  item.price.currency_code !== 'dust' && item.price.currency_code !== 'xpf'
-)
-
-if (isDustProduct && hasFiatItems) {
-  throw new Error('Cannot add dust products to a cart with regular products...')
-}
-```
-
 ### Checkout Flow
 
 **Key File**: `app/api/checkout/route.ts`
@@ -671,7 +621,6 @@ if (isDustProduct && hasFiatItems) {
 2. **Determine payment method**:
    ```typescript
    const isDustPayment = cart.currency === 'dust' || 
-                         cart.currency === 'xpf' || 
                          paymentMethod === 'dust'
    ```
 
@@ -684,29 +633,6 @@ if (isDustProduct && hasFiatItems) {
 4. **For fiat payments**:
    - Create order with `paymentMethod: 'fiat'`
    - (Stripe integration would go here)
-
-**Dust Payment Validation**:
-```typescript
-if (isDustPayment) {
-  // Ensure all items are dust products
-  const hasNonDustItems = cart.items.some(item => 
-    item.price.currency_code !== 'dust' && item.price.currency_code !== 'xpf'
-  )
-  
-  if (hasNonDustItems) {
-    return error('Dust can only be used for dust-only products')
-  }
-  
-  // Check balance
-  const balance = getUserDustBalance(customerId)
-  if (balance < cart.total) {
-    return error('Insufficient dust balance')
-  }
-  
-  // Process payment
-  processDustPayment(customerId, cart.total)
-}
-```
 
 ### Order Creation
 
@@ -953,11 +879,11 @@ custom-store-test/
 
 **Important**: The current implementation is **self-hosted** - you're running Medusa backend on your own infrastructure (`~/Documents/Eriks Curiosa/medusa-backend`). This means:
 
-- ✅ **No monthly fees** for Medusa platform
-- ✅ **Full control** over infrastructure and data
-- ✅ **Customizable** without platform restrictions
-- ⚠️ **You manage** hosting, scaling, backups, and maintenance
-- ⚠️ **You're responsible** for uptime and performance
+- **No monthly fees** for Medusa platform
+- **Full control** over infrastructure and data
+- **Customizable** without platform restrictions
+- **You manage** hosting, scaling, backups, and maintenance
+- **You're responsible** for uptime and performance
 
 ### Medusa Cloud Plans (If You Choose to Migrate)
 
@@ -980,12 +906,12 @@ If you decide to migrate to **Medusa Cloud** (hosted platform), here are the ava
 - **Best for**: Launching and scaling production applications
 - **Features**:
   - Everything in Hobby Plan, plus:
-  - ✅ Production-ready infrastructure
-  - ✅ Concurrent previews
-  - ✅ Automatic backups
-  - ✅ Multiple cloud seats
-  - ✅ Priority support on cloud issues
-  - ✅ Better uptime and reliability
+  - Production-ready infrastructure
+  - Concurrent previews
+  - Automatic backups
+  - Multiple cloud seats
+  - Priority support on cloud issues
+  - Better uptime and reliability
 
 **Documentation**: [Pro Plan Details](https://docs.medusajs.com/cloud/pricing#pro-plan)
 
@@ -994,12 +920,12 @@ If you decide to migrate to **Medusa Cloud** (hosted platform), here are the ava
 - **Best for**: Companies with advanced needs and high scale
 - **Features**:
   - Everything in Pro Plan, plus:
-  - ✅ Medusa platform support
-  - ✅ Direct access to core team
-  - ✅ SLA-backed uptimes
-  - ✅ Custom resource pricing
-  - ✅ Upgrade support
-  - ✅ Dedicated support channels
+  - Medusa platform support
+  - Direct access to core team
+  - SLA-backed uptimes
+  - Custom resource pricing
+  - Upgrade support
+  - Dedicated support channels
 
 **Documentation**: [Enterprise Plan Details](https://docs.medusajs.com/cloud/pricing#enterprise-plan)
 
@@ -1097,20 +1023,9 @@ If you decide to migrate to **Medusa Cloud** (hosted platform), here are the ava
 
 ### Project-Specific Resources
 
-- **Backend Project**: `~/Documents/Eriks Curiosa/medusa-backend`
+- **Backend Project**: `medusa-backend`
 - **Frontend Project**: `custom-store-test`
 - **Backend Setup Guide**: `medusa-backend/SETUP_DUST_PRODUCTS.md`
 - **Connection Guide**: `custom-store-test/CONNECT_STOREFRONT_TO_BACKEND.md`
 
 ---
-
-## Contact
-
-For questions or issues during implementation, refer to:
-- Backend code comments
-- Frontend code comments
-- This handover document
-- Medusa.js official documentation
-
-Good luck with the implementation! 🚀
-

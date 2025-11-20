@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
 
     // Determine payment method from cart currency
     // Dust can only be used for dust-only products
-    const isDustPayment = cart.currency === 'dust' || cart.currency === 'xpf' || paymentMethod === 'dust'
+    const isDustPayment = cart.currency === 'dust' || paymentMethod === 'dust'
 
     if (isDustPayment) {
       // Validate that all items in cart are dust products
