@@ -10,50 +10,49 @@ import { generateId } from './utils'
  * Following Single Responsibility Principle - handles only cart calculations
  * Exported for testing purposes
  */
-export class CartCalculator {
-  /**
-   * Calculates the total price of cart items
-   */
-  static calculateTotal(items: CartItem[]): number {
-    return items.reduce((sum, item) => {
-      return sum + item.price.amount * item.quantity
-    }, 0)
+
+/**
+ * Calculates the total price of cart items
+ */
+export function calculateCartTotal(items: CartItem[]): number {
+  return items.reduce((sum, item) => {
+    return sum + item.price.amount * item.quantity
+  }, 0)
+}
+
+/**
+ * Determines the cart currency based on items
+ * Returns 'mixed' if multiple currencies are present
+ * Normalizes XPF to 'dust' for consistency
+ */
+export function determineCartCurrency(items: CartItem[]): string {
+  if (items.length === 0) {
+    return CURRENCY_CODES.USD
   }
 
-  /**
-   * Determines the cart currency based on items
-   * Returns 'mixed' if multiple currencies are present
-   * Normalizes XPF to 'dust' for consistency
-   */
-  static determineCurrency(items: CartItem[]): string {
-    if (items.length === 0) {
-      return CURRENCY_CODES.USD
-    }
-
-    // Normalize XPF to dust for currency determination
-    const normalizedCurrencies = items.map(item => {
-      const currency = item.price.currency_code
-      return currency === 'xpf' ? 'dust' : currency
-    })
-    
-    const currencies = Array.from(new Set(normalizedCurrencies))
-    
-    if (currencies.length > 1) {
-      return CURRENCY_CODES.MIXED
-    }
-    
-    return currencies[0] || CURRENCY_CODES.USD
+  // Normalize XPF to dust for currency determination
+  const normalizedCurrencies = items.map(item => {
+    const currency = item.price.currency_code
+    return currency === 'xpf' ? 'dust' : currency
+  })
+  
+  const currencies = Array.from(new Set(normalizedCurrencies))
+  
+  if (currencies.length > 1) {
+    return CURRENCY_CODES.MIXED
   }
+  
+  return currencies[0] || CURRENCY_CODES.USD
+}
 
-  /**
-   * Recalculates cart totals and currency
-   * Following DRY principle - single method for recalculation
-   */
-  static recalculate(cart: Cart): Cart {
-    cart.total = this.calculateTotal(cart.items)
-    cart.currency = this.determineCurrency(cart.items)
-    return cart
-  }
+/**
+ * Recalculates cart totals and currency
+ * Following DRY principle - single method for recalculation
+ */
+export function recalculateCart(cart: Cart): Cart {
+  cart.total = calculateCartTotal(cart.items)
+  cart.currency = determineCartCurrency(cart.items)
+  return cart
 }
 
 // Simple in-memory storage
@@ -62,7 +61,10 @@ export const carts: Map<string, Cart> = new Map()
 
 export function getOrCreateCart(cartId?: string): Cart {
   if (cartId && carts.has(cartId)) {
-    return carts.get(cartId)!
+    const cart = carts.get(cartId)
+    if (cart) {
+      return cart
+    }
   }
 
   const newCart: Cart = {
@@ -120,7 +122,7 @@ export function addToCart(
     })
   }
 
-  CartCalculator.recalculate(cart)
+  recalculateCart(cart)
   carts.set(cartId, cart)
   return cart
 }
@@ -129,7 +131,7 @@ export function removeFromCart(cartId: string, itemId: string): Cart {
   const cart = getOrCreateCart(cartId)
   cart.items = cart.items.filter((item) => item.id !== itemId)
 
-  CartCalculator.recalculate(cart)
+  recalculateCart(cart)
   carts.set(cartId, cart)
   return cart
 }
@@ -149,7 +151,7 @@ export function updateCartItemQuantity(
     item.quantity = quantity
   }
 
-  CartCalculator.recalculate(cart)
+  recalculateCart(cart)
   carts.set(cartId, cart)
   return cart
 }
