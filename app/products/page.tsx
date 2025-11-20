@@ -107,16 +107,41 @@ export default function ProductsPage() {
       }
 
       // For dust products, use dust_price from metadata
-      const isDustProduct = product.metadata?.dust_only === true
-      const dustPrice = product.metadata?.dust_price
+      // Check metadata for dust_only flag (handle boolean true, string "true", or number 1)
+      const dustOnlyValue = product.metadata?.dust_only as any
+      const isDustProduct = dustOnlyValue === true || 
+                            dustOnlyValue === 'true' ||
+                            dustOnlyValue === 1 ||
+                            dustOnlyValue === '1' ||
+                            product.tags?.some(t => t.value === 'dust-only')
+      
+      const dustPriceRaw = product.metadata?.dust_price
+      const dustPrice = dustPriceRaw !== undefined && dustPriceRaw !== null
+        ? Number(dustPriceRaw)
+        : undefined
       
       // Determine the price to use: dust_price if available, otherwise regular price
-      const priceAmount = isDustProduct && dustPrice !== undefined 
-        ? dustPrice 
-        : price.amount
+      // For dust products, we MUST have a valid dust_price
+      let priceAmount: number
+      let currencyCode: string
       
-      // Use 'dust' currency code for dust products, otherwise use the variant's currency
-      const currencyCode = isDustProduct ? 'dust' : price.currency_code
+      if (isDustProduct) {
+        if (dustPrice === undefined || dustPrice === null || Number.isNaN(dustPrice) || dustPrice <= 0) {
+          alert(`This dust product doesn't have a valid dust price configured. Please contact support.`)
+          return
+        }
+        priceAmount = dustPrice
+        currencyCode = 'dust'
+      } else {
+        priceAmount = price.amount
+        currencyCode = price.currency_code
+      }
+      
+      // Validate price before adding to cart
+      if (!priceAmount || priceAmount <= 0) {
+        alert(`Invalid price for ${product.title}. Please contact support.`)
+        return
+      }
 
       const res = await fetch('/api/cart', {
         method: 'POST',

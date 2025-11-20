@@ -55,14 +55,46 @@ export async function POST(request: NextRequest) {
     switch (action) {
       case 'add':
         if (!productId || !variantId || !title || !price) {
+          console.error('Cart API - Missing required fields:', {
+            productId,
+            variantId,
+            title,
+            price,
+            hasPrice: !!price,
+          })
           return NextResponse.json(
-            { error: 'Missing required fields' },
+            { error: 'Missing required fields', details: { productId, variantId, title, price } },
             { status: 400 }
           )
         }
+        
+        // Validate price structure
+        if (!price.amount || price.amount <= 0) {
+          console.error('Cart API - Invalid price amount:', price)
+          return NextResponse.json(
+            { error: 'Invalid price amount', price },
+            { status: 400 }
+          )
+        }
+        
+        if (!price.currency_code) {
+          console.error('Cart API - Missing currency_code:', price)
+          return NextResponse.json(
+            { error: 'Missing currency_code', price },
+            { status: 400 }
+          )
+        }
+        
         try {
           cart = addToCart(cartId, productId, variantId, title, price, quantity)
+          console.log('Cart API - Item added successfully:', {
+            cartId,
+            itemCount: cart.items.length,
+            total: cart.total,
+            currency: cart.currency,
+          })
         } catch (error: any) {
+          console.error('Cart API - Error adding to cart:', error)
           return NextResponse.json(
             { error: error.message || 'Failed to add item to cart' },
             { status: 400 }

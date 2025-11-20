@@ -44,12 +44,21 @@ export async function POST(request: NextRequest) {
 
     // Get cart - try multiple methods to ensure we find it
     let cart = getCart(cartId)
+    console.log('Checkout API - Initial cart lookup:', {
+      requestedCartId: bodyCartId,
+      cookieCartId: request.cookies.get(CART_COOKIE_NAME)?.value,
+      foundCart: cart ? { id: cart.id, itemCount: cart.items.length, total: cart.total, currency: cart.currency } : null,
+    })
     
     // If cart not found, try cookie cartId
     if (!cart) {
       const cookieCartId = request.cookies.get(CART_COOKIE_NAME)?.value
       if (cookieCartId && cookieCartId !== cartId) {
         cart = getCart(cookieCartId)
+        console.log('Checkout API - Tried cookie cartId:', {
+          cookieCartId,
+          found: cart ? { id: cart.id, itemCount: cart.items.length } : null,
+        })
         // Update cartId to match cookie if found
         if (cart) {
           cartId = cookieCartId
@@ -62,6 +71,10 @@ export async function POST(request: NextRequest) {
       const cookieCartId = request.cookies.get(CART_COOKIE_NAME)?.value
       if (cookieCartId) {
         cart = getOrCreateCart(cookieCartId)
+        console.log('Checkout API - Created new cart:', {
+          cartId: cookieCartId,
+          itemCount: cart.items.length,
+        })
         if (cart && cart.items.length > 0) {
           cartId = cookieCartId
         }
@@ -70,11 +83,18 @@ export async function POST(request: NextRequest) {
     
     // Final check
     if (!cart || !cart.items || cart.items.length === 0) {
-      console.error('Checkout API - Cart not found:', {
+      console.error('Checkout API - Cart not found or empty:', {
         requestedCartId: bodyCartId,
         cookieCartId: request.cookies.get(CART_COOKIE_NAME)?.value,
-        foundCart: cart,
-        allCartIds: Array.from(carts.keys()).slice(0, 5),
+        usedCartId: cartId,
+        foundCart: cart ? { id: cart.id, items: cart.items, total: cart.total, currency: cart.currency } : null,
+        allCartIds: Array.from(carts.keys()).slice(0, 10),
+        allCarts: Array.from(carts.entries()).slice(0, 5).map(([id, c]) => ({
+          id,
+          itemCount: c.items.length,
+          total: c.total,
+          currency: c.currency,
+        })),
       })
       
       return NextResponse.json(
