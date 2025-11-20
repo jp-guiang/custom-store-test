@@ -4,21 +4,18 @@
 /**
  * Formats a price amount based on currency
  * @param amount - Price amount (in cents for fiat currencies, or full units for Medusa v2)
- * @param currency - Currency code (e.g., 'usd', 'dust')
+ * @param currency - Currency code (e.g., 'usd', 'dust', 'xpf')
  * @returns Formatted price string
  */
 export function formatPrice(amount: number, currency: string): string {
-  if (currency === 'dust') {
+  // Dust currency - display as dust points
+  if (currency === 'dust' || currency === 'xpf') {
+    // Dust prices are stored as full units (e.g., 1000 = 1000 dust)
+    // No need to divide by 100 like fiat currencies
     return `${amount.toLocaleString()} ⚡ Dust`
   }
   
   // Medusa v2 stores prices in smallest currency unit (cents for EUR/USD)
-  // However, if prices appear too low (€0.10 instead of €10.00), 
-  // Medusa v2 might be storing as full currency units
-  // Check: if amount < 1000 and looks like full units (not a round cent amount), use as-is
-  // Otherwise divide by 100 to convert from cents
-  // For now, we'll divide by 100 (standard Medusa format)
-  // If prices are wrong, check Medusa admin to see actual stored values
   const displayAmount = amount / 100
   
   return new Intl.NumberFormat('en-US', {
@@ -34,8 +31,12 @@ export function formatPrice(amount: number, currency: string): string {
  * @returns Formatted price string (without "Dust" suffix for dust)
  */
 export function formatPriceShort(amount: number, currency: string): string {
-  if (currency === 'dust') {
-    return `${amount.toLocaleString()} ⚡`
+  // XPF is used as dust currency in Medusa backend
+  if (currency === 'dust' || currency === 'xpf') {
+    // XPF amounts: if >= 1000, likely in cents (divide by 100)
+    // Otherwise, treat as full units
+    const displayAmount = amount >= 1000 ? amount / 100 : amount
+    return `${displayAmount.toLocaleString()} ⚡`
   }
   
   return new Intl.NumberFormat('en-US', {

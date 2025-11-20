@@ -23,13 +23,20 @@ export class CartCalculator {
   /**
    * Determines the cart currency based on items
    * Returns 'mixed' if multiple currencies are present
+   * Normalizes XPF to 'dust' for consistency
    */
   static determineCurrency(items: CartItem[]): string {
     if (items.length === 0) {
       return CURRENCY_CODES.USD
     }
 
-    const currencies = Array.from(new Set(items.map(item => item.price.currency_code)))
+    // Normalize XPF to dust for currency determination
+    const normalizedCurrencies = items.map(item => {
+      const currency = item.price.currency_code
+      return currency === 'xpf' ? 'dust' : currency
+    })
+    
+    const currencies = Array.from(new Set(normalizedCurrencies))
     
     if (currencies.length > 1) {
       return CURRENCY_CODES.MIXED
@@ -78,6 +85,23 @@ export function addToCart(
   quantity: number = 1
 ): Cart {
   const cart = getOrCreateCart(cartId)
+
+  // Check if adding a dust product to a cart with fiat products (or vice versa)
+  const isDustProduct = price.currency_code === 'dust' || price.currency_code === 'xpf'
+  const hasFiatItems = cart.items.some(item => 
+    item.price.currency_code !== 'dust' && item.price.currency_code !== 'xpf'
+  )
+  const hasDustItems = cart.items.some(item => 
+    item.price.currency_code === 'dust' || item.price.currency_code === 'xpf'
+  )
+
+  // Prevent mixing dust and fiat products
+  if (isDustProduct && hasFiatItems) {
+    throw new Error('Cannot add dust products to a cart with regular products. Please checkout your current cart first.')
+  }
+  if (!isDustProduct && hasDustItems) {
+    throw new Error('Cannot add regular products to a cart with dust products. Please checkout your current cart first.')
+  }
 
   const existingItemIndex = cart.items.findIndex(
     (item) => item.variantId === variantId

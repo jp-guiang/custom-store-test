@@ -21,6 +21,11 @@ export interface Product {
   }>
   tags: Array<{ value: string }>
   images?: Array<{ url: string }>
+  metadata?: {
+    dust_only?: boolean | string | number
+    dust_price?: number | string
+    [key: string]: any
+  }
 }
 
 export interface CartItem {

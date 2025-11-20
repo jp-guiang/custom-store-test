@@ -44,26 +44,40 @@ export async function getProductsFromBackend() {
         if (regionsData.regions && regionsData.regions.length > 0) {
           regionId = regionsData.regions[0].id
           currencyCode = regionsData.regions[0].currency_code || 'usd'
-          console.log(`[Debug] Using region: ${regionId}, currency: ${currencyCode}`)
         }
       }
     } catch (err) {
       console.warn('Failed to fetch regions:', err)
     }
     
-    // Fetch products with prices using REST API (includes calculated_price when region_id is provided)
-    const productsUrl = regionId 
-      ? `${backendUrl}/store/products?limit=100&region_id=${regionId}`
-      : `${backendUrl}/store/products?limit=100`
+    // Try custom endpoint first (includes metadata), fallback to standard endpoint
+    // The standard /store/products endpoint doesn't return metadata for security reasons
+    let productsUrl = `${backendUrl}/store/products-with-metadata?limit=100`
+    if (regionId) {
+      productsUrl += `&region_id=${regionId}`
+    }
     
-    console.log(`[Debug] Fetching products from: ${productsUrl}`)
-    
-    const response = await fetch(productsUrl, {
+    let response = await fetch(productsUrl, {
       headers: {
         'x-publishable-api-key': apiKey,
       },
       cache: 'no-store', // Disable caching to ensure fresh data
     })
+    
+    // If custom endpoint doesn't exist or fails, fallback to standard endpoint
+    if (!response.ok) {
+      console.warn(`Custom products endpoint failed (${response.status}), falling back to standard endpoint`)
+      productsUrl = regionId 
+        ? `${backendUrl}/store/products?limit=100&region_id=${regionId}`
+        : `${backendUrl}/store/products?limit=100`
+      
+      response = await fetch(productsUrl, {
+        headers: {
+          'x-publishable-api-key': apiKey,
+        },
+        cache: 'no-store',
+      })
+    }
     
     if (!response.ok) {
       throw new Error(`Failed to fetch products: ${response.status} ${response.statusText}`)
@@ -73,19 +87,55 @@ export async function getProductsFromBackend() {
     const products = data.products || []
     
     if (products.length === 0) {
-      console.log('No products found in Medusa backend')
       return []
+    }
+    
+    // Fetch dust product settings from backend (optional - endpoint may not exist yet)
+    let dustSettingsMap: Record<string, { dust_only: boolean; dust_price?: number }> = {}
+    try {
+      const productIds = products.map((p: any) => p.id)
+      if (productIds.length > 0) {
+        // Query parameter format: product_ids=id1,id2,id3 or product_ids[]=id1&product_ids[]=id2
+        // Try comma-separated first, which should work with the backend
+        const productIdsParam = productIds.join(',')
+        const dustSettingsResponse = await fetch(`${backendUrl}/store/dust/products?product_ids=${productIdsParam}`, {
+          headers: {
+            'x-publishable-api-key': apiKey,
+          },
+          cache: 'no-store',
+        })
+        
+        if (dustSettingsResponse.ok) {
+          const dustSettingsData = await dustSettingsResponse.json()
+          dustSettingsMap = dustSettingsData.settings || {}
+          if (Object.keys(dustSettingsMap).length > 0) {
+            console.log('[Debug] Fetched dust settings from dust_product table:', dustSettingsMap)
+          } else {
+            console.log('[Debug] Dust settings endpoint returned empty settings')
+          }
+        } else {
+          const errorText = await dustSettingsResponse.text().catch(() => '')
+          console.warn(`Dust products endpoint returned ${dustSettingsResponse.status}:`, errorText.substring(0, 200))
+        }
+      }
+    } catch (err) {
+      // Silently fail - dust settings are optional, we'll use metadata/tags as fallback
+      console.warn('Failed to fetch dust product settings (using fallback):', err instanceof Error ? err.message : err)
     }
     
     // Transform to match expected format
     return products.map((product: any) => {
-      // Debug: Check if we got calculated_price in variants
-      if (process.env.NODE_ENV === 'development' && product.title?.includes('Sweatpants')) {
-        console.log(`[Debug] Product: ${product.title}, Description: ${product.description}`)
-        console.log(`[Debug] First variant calculated_price:`, product.variants?.[0]?.calculated_price)
-        console.log(`[Debug] First variant prices:`, product.variants?.[0]?.prices)
+      // Debug: Log metadata for dust products
+      if (product.title?.toLowerCase().includes('dust')) {
+        const dustSettings = dustSettingsMap[product.id]
+        console.log('[Debug] Dust product:', {
+          title: product.title,
+          productId: product.id,
+          dustSettingsFromTable: dustSettings,
+          metadata: product.metadata,
+          metadata_keys: product.metadata ? Object.keys(product.metadata) : [],
+        })
       }
-      
       // Transform variants to include prices in expected format
       const transformedVariants = (product.variants || []).map((variant: any) => {
         // Extract prices from variant - prioritize calculated_price (includes region context)
@@ -128,11 +178,6 @@ export async function getProductsFromBackend() {
             amount: amount,
             currency_code: priceCurrency,
           }]
-          
-          // Debug logging (remove in production)
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`[Price] Product: ${product.title}, Variant: ${variant.title}, calculated_amount: ${variant.calculated_price?.calculated_amount}, final_amount: ${amount}`)
-          }
         } else if (variant.prices && Array.isArray(variant.prices) && variant.prices.length > 0) {
           // Fallback to direct prices if calculated_price not available
           prices = variant.prices.map((price: any) => ({
@@ -165,11 +210,55 @@ export async function getProductsFromBackend() {
         }))
       }
       
-      // If no tags, assign default tag based on price currency
+      // Check dust_product table settings first (primary source)
+      const dustSettings = dustSettingsMap[product.id]
+      const dustOnly = dustSettings?.dust_only === true
+      // dust_price from dust_product table is stored as full units (e.g., 1000 = 1000 dust)
+      const dustPrice = dustSettings?.dust_price !== undefined && dustSettings.dust_price !== null
+        ? Number(dustSettings.dust_price) 
+        : undefined
+      
+      // Fallback to metadata if dust_product table doesn't have settings
+      const metadata = product.metadata || {}
+      const metadataDustOnly = !dustSettings && (
+        metadata.dust_only === true || 
+        metadata.dust_only === 'true' || 
+        metadata.dust_only === '1' ||
+        metadata.dust_only === 1
+      )
+      const metadataDustPrice = !dustPrice && metadata.dust_price !== undefined && metadata.dust_price !== null
+        ? Number(metadata.dust_price) 
+        : undefined
+      
+      // Temporary fallback: Check if product title contains "dust" (for testing)
+      // This helps identify dust products until the dust_product table is properly populated
+      const titleContainsDust = product.title?.toLowerCase().includes('dust')
+      
+      // Use dust_product table settings if available, otherwise use metadata, then title check
+      const finalDustOnly = dustOnly || metadataDustOnly || (titleContainsDust && !dustSettings && !metadataDustOnly)
+      // Prioritize dust_price from dust_product table, then metadata, then undefined
+      const finalDustPrice = dustPrice !== undefined ? dustPrice : (metadataDustPrice !== undefined ? metadataDustPrice : undefined)
+      
+      // If product is dust-only, ensure it has dust-only tag and remove fiat tag
+      if (finalDustOnly) {
+        // Remove fiat tag if present
+        tags = tags.filter(t => t.value !== 'fiat')
+        // Add dust-only tag if not present
+        if (!tags.some(t => t.value === 'dust-only')) {
+          tags.push({ value: 'dust-only' })
+        }
+      } else {
+        // If not dust-only, ensure it doesn't have dust-only tag
+        tags = tags.filter(t => t.value !== 'dust-only')
+        // Add fiat tag if no tags present
+        if (tags.length === 0 && transformedVariants.length > 0) {
+          tags.push({ value: 'fiat' })
+        }
+      }
+      
+      // If still no tags, assign default tag based on dust settings
       if (tags.length === 0 && transformedVariants.length > 0) {
-        const firstVariant = transformedVariants[0]
-        const firstPrice = firstVariant.prices[0]
-        if (firstPrice && firstPrice.currency_code === 'dust') {
+        if (finalDustOnly) {
           tags = [{ value: 'dust-only' }]
         } else {
           tags = [{ value: 'fiat' }]
@@ -188,6 +277,11 @@ export async function getProductsFromBackend() {
         options: product.options || [],
         tags: tags,
         variants: transformedVariants,
+        metadata: {
+          ...metadata,
+          dust_only: finalDustOnly,
+          dust_price: finalDustPrice !== undefined ? finalDustPrice : undefined,
+        },
       }
     })
   } catch (error: any) {

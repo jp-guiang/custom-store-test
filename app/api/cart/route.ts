@@ -60,7 +60,14 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           )
         }
-        cart = addToCart(cartId, productId, variantId, title, price, quantity)
+        try {
+          cart = addToCart(cartId, productId, variantId, title, price, quantity)
+        } catch (error: any) {
+          return NextResponse.json(
+            { error: error.message || 'Failed to add item to cart' },
+            { status: 400 }
+          )
+        }
         break
 
       case 'remove':

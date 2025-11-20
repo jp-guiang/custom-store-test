@@ -104,9 +104,26 @@ export async function POST(request: NextRequest) {
     }
 
     // Determine payment method from cart currency
-    const isDustPayment = cart.currency === 'dust' || paymentMethod === 'dust'
+    // Dust can only be used for dust-only products
+    const isDustPayment = cart.currency === 'dust' || cart.currency === 'xpf' || paymentMethod === 'dust'
 
     if (isDustPayment) {
+      // Validate that all items in cart are dust products
+      // Dust cannot be used to discount regular products
+      const hasNonDustItems = cart.items.some(item => {
+        // Check if item has dust currency
+        return item.price.currency_code !== 'dust' && item.price.currency_code !== 'xpf'
+      })
+      
+      if (hasNonDustItems) {
+        return NextResponse.json(
+          {
+            error: 'Dust can only be used to purchase dust-only products. Please remove regular products from your cart.',
+          },
+          { status: 400 }
+        )
+      }
+      
       // Check dust balance
       const balance = getUserDustBalance(TEST_USER_ID)
       if (balance < cart.total) {

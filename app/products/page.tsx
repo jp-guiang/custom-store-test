@@ -106,6 +106,18 @@ export default function ProductsPage() {
         throw new Error('Product price not found')
       }
 
+      // For dust products, use dust_price from metadata
+      const isDustProduct = product.metadata?.dust_only === true
+      const dustPrice = product.metadata?.dust_price
+      
+      // Determine the price to use: dust_price if available, otherwise regular price
+      const priceAmount = isDustProduct && dustPrice !== undefined 
+        ? dustPrice 
+        : price.amount
+      
+      // Use 'dust' currency code for dust products, otherwise use the variant's currency
+      const currencyCode = isDustProduct ? 'dust' : price.currency_code
+
       const res = await fetch('/api/cart', {
         method: 'POST',
         headers: {
@@ -118,19 +130,27 @@ export default function ProductsPage() {
           variantId: variant.id,
           title: product.title,
           price: {
-            amount: price.amount,
-            currency_code: price.currency_code,
+            amount: priceAmount,
+            currency_code: currencyCode,
           },
           quantity: quantity,
         }),
       })
 
-      await res.json()
+      const result = await res.json()
+      
+      // Check if there's an error message
+      if (result.error) {
+        alert(result.error)
+        return
+      }
+      
       dispatchCartUpdate()
       await fetchCart()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding to cart:', error)
-      alert('Failed to add item to cart')
+      const errorMessage = error.message || 'Failed to add item to cart'
+      alert(errorMessage)
     } finally {
       setAddingToCart(null)
     }
@@ -217,17 +237,54 @@ export default function ProductsPage() {
     )
   }
 
-  // Filter products by tags, but show all products if no tags match
-  const fiatProducts = products.filter((p) =>
-    p.tags && p.tags.length > 0 
-      ? p.tags.some((t) => t.value === 'fiat')
-      : true // Show products without tags in fiat section
-  )
-  const dustProducts = products.filter((p) =>
-    p.tags && p.tags.length > 0
-      ? p.tags.some((t) => t.value === 'dust-only')
-      : false // Don't show untagged products in dust section
-  )
+  // Filter products by metadata.dust_only flag or tags
+  // Products with metadata.dust_only === true OR tag 'dust-only' are dust products
+  const fiatProducts = products.filter((p) => {
+    // Check metadata for dust_only flag (handle boolean true, string "true", or string "1")
+    // Metadata values might come as strings from API, so check both types
+    const dustOnlyValue = p.metadata?.dust_only as any
+    const isDustProduct = dustOnlyValue === true || 
+                         dustOnlyValue === 'true' || 
+                         dustOnlyValue === '1' ||
+                         dustOnlyValue === 1
+    
+    if (isDustProduct) {
+      return false // Don't show dust products in fiat section
+    }
+    
+    // Check tags as fallback
+    if (p.tags && p.tags.length > 0) {
+      const hasDustTag = p.tags.some((t) => t.value === 'dust-only')
+      if (hasDustTag) {
+        return false // Don't show dust-tagged products in fiat section
+      }
+      return p.tags.some((t) => t.value === 'fiat')
+    }
+    
+    // Show products without dust_only metadata/tags in fiat section (default)
+    return true
+  })
+  
+  const dustProducts = products.filter((p) => {
+    // Check metadata for dust_only flag (handle boolean true, string "true", or string "1")
+    // Metadata values might come as strings from API, so check both types
+    const dustOnlyValue = p.metadata?.dust_only as any
+    const isDustProduct = dustOnlyValue === true || 
+                         dustOnlyValue === 'true' || 
+                         dustOnlyValue === '1' ||
+                         dustOnlyValue === 1
+    
+    if (isDustProduct) {
+      return true // Show dust products
+    }
+    
+    // Check tags as fallback
+    if (p.tags && p.tags.length > 0) {
+      return p.tags.some((t) => t.value === 'dust-only')
+    }
+    
+    return false
+  })
 
   return (
     <main className="min-h-screen p-8 bg-gray-50">
@@ -383,14 +440,21 @@ export default function ProductsPage() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {dustProducts.map((product) => {
-              // Get first variant with a price, or use first variant
+              // Use dust_price from metadata if available, otherwise use variant price
+              const dustPriceRaw = product.metadata?.dust_price
+              const dustPrice = dustPriceRaw !== undefined ? Number(dustPriceRaw) : undefined
               const variant = product.variants && product.variants.length > 0 
                 ? product.variants.find((v) => v.prices && v.prices.length > 0) || product.variants[0]
                 : null
               const price = variant?.prices?.[0]
+              
+              // For dust products, use dust_price from metadata (in dust points)
+              // If dust_price is set, use it; otherwise fall back to variant price
+              const priceAmount = dustPrice !== undefined && !Number.isNaN(dustPrice) ? dustPrice : (price?.amount || 0)
+              
               const isAdding = addingToCart === product.id
               const quantity = quantities[product.title] || 1
-              const canAfford = price ? dustBalance >= price.amount * quantity : false
+              const canAfford = dustBalance >= priceAmount * quantity
               
               return (
                 <Link
@@ -405,16 +469,18 @@ export default function ProductsPage() {
                     </h3>
                   </div>
                   <p className="text-gray-600 mb-4">{product.description}</p>
-                  {!canAfford && price && (
+                  {!canAfford && (
                     <div className="mb-2 text-sm text-red-600">
                       Insufficient dust. Need{' '}
-                      {formatPrice(price.amount * quantity, price.currency_code)}
+                      {formatPrice(priceAmount * quantity, 'dust')}
                     </div>
                   )}
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-2xl font-bold text-yellow-600">
-                      {price
-                        ? formatPrice(price.amount, price.currency_code)
+                      {dustPrice !== undefined && !Number.isNaN(dustPrice)
+                        ? formatPrice(dustPrice, 'dust')
+                        : price
+                        ? formatPrice(priceAmount, 'dust')
                         : 'N/A'}
                     </span>
                   </div>

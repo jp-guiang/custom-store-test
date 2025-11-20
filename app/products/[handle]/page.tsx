@@ -112,6 +112,13 @@ export default function ProductDetailPage() {
       const variant = product.variants[0]
       const price = variant.prices[0]
 
+      // For dust products, use dust_price from metadata
+      const dustPrice = product.metadata?.dust_price
+      const priceAmount = isDustProduct && dustPrice !== undefined 
+        ? dustPrice 
+        : price.amount
+      const currencyCode = isDustProduct ? 'dust' : price.currency_code
+
       const res = await fetch('/api/cart', {
         method: 'POST',
         headers: {
@@ -124,8 +131,8 @@ export default function ProductDetailPage() {
           variantId: variant.id,
           title: product.title,
           price: {
-            amount: price.amount,
-            currency_code: price.currency_code,
+            amount: priceAmount,
+            currency_code: currencyCode,
           },
           quantity: quantity,
         }),
@@ -228,8 +235,20 @@ export default function ProductDetailPage() {
 
   const variant = product.variants[0]
   const price = variant.prices[0]
-  const isDustProduct = product.tags.some((t) => t.value === 'dust-only')
-  const canAfford = price ? dustBalance >= price.amount * quantity : false
+  // Check if product is dust by metadata
+  const isDustProduct = product.metadata?.dust_only === true || 
+                        product.metadata?.dust_only === 'true' ||
+                        product.metadata?.dust_only === 1 ||
+                        product.tags.some((t) => t.value === 'dust-only')
+  const dustPrice = product.metadata?.dust_price !== undefined 
+    ? Number(product.metadata.dust_price) 
+    : undefined
+  // For dust products, use dust_price from metadata if available, otherwise use variant price
+  // dust_price is stored as full units (e.g., 1000 for 1000 dust)
+  const priceAmount = isDustProduct && dustPrice !== undefined 
+    ? dustPrice 
+    : (price?.amount || 0)
+  const canAfford = isDustProduct ? dustBalance >= priceAmount * quantity : true
 
   return (
     <main className="min-h-screen p-8 bg-gray-50">
@@ -262,7 +281,13 @@ export default function ProductDetailPage() {
               <div>
                 <div className="text-sm text-gray-500 mb-1">Price</div>
                 <div className="text-3xl font-bold text-gray-900">
-                  {price ? formatPrice(price.amount, price.currency_code) : 'N/A'}
+                  {isDustProduct && dustPrice !== undefined && !Number.isNaN(dustPrice)
+                    ? formatPrice(dustPrice, 'dust')
+                    : isDustProduct
+                    ? formatPrice(priceAmount, 'dust')
+                    : price
+                    ? formatPrice(price.amount, price.currency_code)
+                    : 'N/A'}
                 </div>
               </div>
               {isDustProduct && (
@@ -279,7 +304,7 @@ export default function ProductDetailPage() {
               <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-red-600 text-sm">
                   Insufficient dust. You need{' '}
-                  {price ? formatPrice(price.amount * quantity, price.currency_code) : 'N/A'}
+                  {formatPrice(priceAmount * quantity, 'dust')}
                 </p>
               </div>
             )}

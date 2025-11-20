@@ -41,20 +41,16 @@ export default function CheckoutPage() {
       })
       const data = await res.json()
       
-      console.log('Checkout page - Cart data:', data)
-      
       if (data.cart) {
         if (data.cart.items && data.cart.items.length > 0) {
           setCart(data.cart)
         } else {
           // Empty cart, redirect to products
-          console.log('Cart is empty, redirecting...')
           router.push('/products')
           return
         }
       } else {
         // No cart data, redirect to products
-        console.log('No cart data, redirecting...')
         router.push('/products')
         return
       }
@@ -149,7 +145,7 @@ export default function CheckoutPage() {
         credentials: 'include', // Ensure cookies are sent
         body: JSON.stringify({
           cartId: checkoutCartId,
-          paymentMethod: cart.currency === 'dust' ? 'dust' : 'fiat',
+          paymentMethod: cart.currency === 'dust' || cart.currency === 'xpf' ? 'dust' : 'fiat',
           customer: customerDetails,
           shippingAddress: shippingAddress,
         }),
@@ -183,7 +179,7 @@ export default function CheckoutPage() {
     return null // Will redirect
   }
 
-  const isDustPayment = cart.currency === 'dust'
+  const isDustPayment = cart.currency === 'dust' || cart.currency === 'xpf'
   const canAfford = isDustPayment ? dustBalance >= cart.total : true
 
   return (
