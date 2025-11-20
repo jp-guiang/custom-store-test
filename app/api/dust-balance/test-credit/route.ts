@@ -39,7 +39,6 @@ export async function POST() {
       }
     } catch (backendError) {
       // Backend endpoint might not exist yet, that's okay
-      console.log('Backend credit endpoint not available, using in-memory balance')
     }
     
     return NextResponse.json({

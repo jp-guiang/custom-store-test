@@ -61,7 +61,6 @@ export async function sendOrderConfirmationEmail(
           text: emailContent.text,
         })
 
-        console.log('✅ Email sent successfully via Resend:', result)
         return { success: true }
       } catch (resendError: unknown) {
         console.error('❌ Resend error:', resendError)
@@ -69,17 +68,7 @@ export async function sendOrderConfirmationEmail(
       }
     }
 
-    // If no API key or Resend failed, log the email
-    console.log('📧 Order Confirmation Email (logged - no API key configured):', {
-      to: emailContent.to,
-      subject: emailContent.subject,
-      html: emailContent.html.substring(0, 100) + '...',
-    })
-    
-    console.log('\n📝 To enable email sending, add to .env.local:')
-    console.log('   RESEND_API_KEY=your_resend_api_key')
-    console.log('   RESEND_FROM_EMAIL=orders@yourdomain.com\n')
-
+    // If no API key or Resend failed, email is not sent (silent fail for POC)
     return { success: true }
   } catch (error) {
     console.error('Error sending email:', error)

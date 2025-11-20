@@ -26,9 +26,7 @@ export async function initializeMedusaModules() {
     // Get database URL from environment
     const databaseUrl = process.env.DATABASE_URL
     
-    if (!databaseUrl) {
-      console.warn("DATABASE_URL not set. Modules will use in-memory storage.")
-    }
+    // DATABASE_URL not set - modules will use in-memory storage
 
     // Load modules
     medusaApp = await loadModules({

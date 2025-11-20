@@ -47,7 +47,7 @@ export async function getProductsFromBackend() {
         }
       }
     } catch (err) {
-      console.warn('Failed to fetch regions:', err)
+      // Region fetch failed, will use fallback
     }
     
     // Try custom endpoint first (includes metadata), fallback to standard endpoint
@@ -66,7 +66,6 @@ export async function getProductsFromBackend() {
     
     // If custom endpoint doesn't exist or fails, fallback to standard endpoint
     if (!response.ok) {
-      console.warn(`Custom products endpoint failed (${response.status}), falling back to standard endpoint`)
       productsUrl = regionId 
         ? `${backendUrl}/store/products?limit=100&region_id=${regionId}`
         : `${backendUrl}/store/products?limit=100`
@@ -108,34 +107,16 @@ export async function getProductsFromBackend() {
         if (dustSettingsResponse.ok) {
           const dustSettingsData = await dustSettingsResponse.json()
           dustSettingsMap = dustSettingsData.settings || {}
-          if (Object.keys(dustSettingsMap).length > 0) {
-            console.log('[Debug] Fetched dust settings from dust_product table:', dustSettingsMap)
-          } else {
-            console.log('[Debug] Dust settings endpoint returned empty settings')
-          }
         } else {
-          const errorText = await dustSettingsResponse.text().catch(() => '')
-          console.warn(`Dust products endpoint returned ${dustSettingsResponse.status}:`, errorText.substring(0, 200))
+          await dustSettingsResponse.text().catch(() => '')
         }
       }
     } catch (err) {
       // Silently fail - dust settings are optional, we'll use metadata/tags as fallback
-      console.warn('Failed to fetch dust product settings (using fallback):', err instanceof Error ? err.message : err)
     }
     
     // Transform to match expected format
     return products.map((product: any) => {
-      // Debug: Log metadata for dust products
-      if (product.title?.toLowerCase().includes('dust')) {
-        const dustSettings = dustSettingsMap[product.id]
-        console.log('[Debug] Dust product:', {
-          title: product.title,
-          productId: product.id,
-          dustSettingsFromTable: dustSettings,
-          metadata: product.metadata,
-          metadata_keys: product.metadata ? Object.keys(product.metadata) : [],
-        })
-      }
       // Transform variants to include prices in expected format
       const transformedVariants = (product.variants || []).map((variant: any) => {
         // Extract prices from variant - prioritize calculated_price (includes region context)
@@ -285,8 +266,6 @@ export async function getProductsFromBackend() {
       }
     })
   } catch (error: any) {
-    console.error('Failed to fetch products from Medusa backend:', error)
-    
     // Provide helpful error message
     if (error.message?.includes('Publishable API key')) {
       throw new Error('Publishable API key required. Get it from Medusa admin: Settings → Publishable API Keys')
@@ -322,8 +301,6 @@ export async function getProductByHandle(handle: string) {
       variants: product.variants || [],
     }
   } catch (error: any) {
-    console.error(`Failed to fetch product ${handle} from Medusa backend:`, error)
-    
     // Provide helpful error message
     if (error.message?.includes('Publishable API key')) {
       throw new Error('Publishable API key required. Get it from Medusa admin: Settings → Publishable API Keys')

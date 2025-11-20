@@ -34,10 +34,7 @@ export async function initializeInventory(products: Array<{
         name: 'Default Warehouse',
       }])
     } catch (error: any) {
-      // Location might already exist, that's fine
-      if (!error.message?.includes('already exists')) {
-        console.warn('Failed to create inventory location:', error)
-      }
+      // Location might already exist, that's fine - ignore error
     }
     
     // Create inventory items for each product variant
@@ -81,7 +78,7 @@ export async function initializeInventory(products: Array<{
             }
           }
         } catch (error) {
-          console.error(`Failed to create inventory for ${variant.sku}:`, error)
+          // Failed to create inventory item - continue with next variant
         }
       }
     }
@@ -91,7 +88,6 @@ export async function initializeInventory(products: Array<{
     return allItems
   } catch (error) {
     // Fallback to in-memory storage
-    console.warn('Failed to initialize Medusa Inventory Module, using in-memory storage:', error)
     
     // Simple in-memory initialization
     products.forEach(product => {
@@ -177,7 +173,6 @@ export async function reserveInventory(variantId: string, sku: string, quantity:
     return true
   } catch (error) {
     // Fallback to in-memory
-    console.warn('Failed to reserve inventory via Medusa module, using fallback:', error)
     const item = inventory.get(variantId)
     if (!item) return false
     

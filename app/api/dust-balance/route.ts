@@ -34,7 +34,6 @@ export async function GET() {
       }
     } catch (backendError) {
       // Backend might not be available or endpoint doesn't exist yet
-      console.log('Backend dust balance not available, using in-memory balance')
     }
     
     // Fallback to in-memory balance (used by checkout)
